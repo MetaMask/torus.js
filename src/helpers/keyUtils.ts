@@ -1,15 +1,29 @@
+import { mod } from "@noble/curves/abstract/modular.js";
 import { bs58 } from "@toruslabs/bs58";
 import { INodePub, KEY_TYPE } from "@toruslabs/constants";
 import { Ecies, encrypt } from "@toruslabs/eccrypto";
-import BN from "bn.js";
-import { curve, ec as EC } from "elliptic";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import { sha512 } from "ethereum-cryptography/sha512";
 import stringify from "json-stable-stringify";
 import log from "loglevel";
 
-import { EncryptedSeed, ImportedShare, KeyType, PrivateKeyData } from "../interfaces";
-import { encParamsBufToHex, generatePrivateKey, getKeyCurve, keccak256 } from "./common";
+import { EncryptedSeed, ImportedShare, KeyType, Point2D, PrivateKeyData } from "../interfaces";
+import {
+  bigintToHex,
+  bytesToBase64,
+  bytesToHex,
+  bytesToNumberBE,
+  bytesToNumberLE,
+  Curve,
+  encParamsBufToHex,
+  generatePrivateKey,
+  getKeyCurve,
+  getSecp256k1,
+  hexToBytes,
+  keccak256,
+  toBigIntBE,
+  utf8ToBytes,
+} from "./common";
 import { generateRandomPolynomial } from "./langrangeInterpolatePoly";
 import { generateNonceMetadataParams, getSecpKeyFromEd25519 } from "./metadataUtils";
 
@@ -20,8 +34,7 @@ export function stripHexPrefix(str: string): string {
 export function toChecksumAddress(hexAddress: string): string {
   const address = stripHexPrefix(hexAddress).toLowerCase();
 
-  const buf = Buffer.from(address, "utf8");
-  const hash = Buffer.from(keccakHash(buf)).toString("hex");
+  const hash = bytesToHex(keccakHash(utf8ToBytes(address)));
   let ret = "0x";
 
   for (let i = 0; i < address.length; i++) {
@@ -35,7 +48,7 @@ export function toChecksumAddress(hexAddress: string): string {
   return ret;
 }
 
-function adjustScalarBytes(bytes: Buffer): Buffer {
+function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
   // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
   // set the three least significant bits of the first byte
   bytes[0] &= 248; // 0b1111_1000
@@ -47,14 +60,13 @@ function adjustScalarBytes(bytes: Buffer): Buffer {
 }
 
 /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
-export function getEd25519ExtendedPublicKey(keyBuffer: Buffer): {
-  scalar: BN;
-  point: curve.base.BasePoint;
+export function getEd25519ExtendedPublicKey(keyBuffer: Uint8Array): {
+  scalar: bigint;
+  point: Point2D;
 } {
   const ed25519Curve = getKeyCurve(KEY_TYPE.ED25519);
   const len = 32;
-  const G = ed25519Curve.g;
-  const N = ed25519Curve.n;
+  const N = ed25519Curve.Point.CURVE().n;
 
   if (keyBuffer.length !== 32) {
     log.error("Invalid seed for ed25519 key derivation", keyBuffer.length);
@@ -66,44 +78,43 @@ export function getEd25519ExtendedPublicKey(keyBuffer: Buffer): {
   if (hashed.length !== 64) {
     throw new Error("Invalid hash length for ed25519 seed");
   }
-  const head = new BN(adjustScalarBytes(Buffer.from(hashed.slice(0, len))), "le");
-  const scalar = new BN(head.umod(N), "le"); // The actual private scalar
-  const point = G.mul(scalar) as curve.base.BasePoint; // Point on Edwards curve aka public key
+  const head = bytesToNumberLE(adjustScalarBytes(new Uint8Array(hashed.slice(0, len))));
+  const scalar = mod(head, N); // The actual private scalar
+  const point = ed25519Curve.Point.BASE.multiply(scalar).toAffine(); // Point on Edwards curve aka public key
   return { scalar, point };
 }
 
-export function encodeEd25519Point(point: curve.base.BasePoint) {
+export function encodeEd25519Point(point: Point2D): Uint8Array {
   const ed25519Curve = getKeyCurve(KEY_TYPE.ED25519);
-
-  const encodingLength = Math.ceil(ed25519Curve.n.bitLength() / 8);
-  const enc = point.getY().toArrayLike(Buffer, "le", encodingLength);
-  enc[encodingLength - 1] |= point.getX().isOdd() ? 0x80 : 0;
-  return enc;
+  return ed25519Curve.Point.fromAffine(point).toBytes();
 }
 
-export const generateEd25519KeyData = async (ed25519Seed: Buffer): Promise<PrivateKeyData> => {
+export const generateEd25519KeyData = async (ed25519Seed: Uint8Array): Promise<PrivateKeyData> => {
   const ed25519Curve = getKeyCurve(KEY_TYPE.ED25519);
+  const N = ed25519Curve.Point.CURVE().n;
 
   const finalEd25519Key = getEd25519ExtendedPublicKey(ed25519Seed);
   const encryptionKey = getSecpKeyFromEd25519(finalEd25519Key.scalar);
-  const encryptedSeed = await encrypt(Buffer.from(encryptionKey.point.encodeCompressed("hex"), "hex"), ed25519Seed);
+
+  const encPubKeyBytes = getSecp256k1().Point.fromAffine(encryptionKey.point).toBytes(true);
+  const encryptedSeed = await encrypt(encPubKeyBytes, ed25519Seed);
   const encData: EncryptedSeed = {
-    enc_text: encryptedSeed.ciphertext.toString("hex"),
+    enc_text: bytesToHex(encryptedSeed.ciphertext),
     metadata: encParamsBufToHex(encryptedSeed),
-    public_key: encodeEd25519Point(finalEd25519Key.point).toString("hex"),
+    public_key: bytesToHex(encodeEd25519Point(finalEd25519Key.point)),
   };
 
-  const encDataBase64 = Buffer.from(JSON.stringify(encData), "utf-8").toString("base64");
-  const metadataPrivNonce = ed25519Curve.genKeyPair().getPrivate();
-  const oauthKey = finalEd25519Key.scalar.sub(metadataPrivNonce).umod(ed25519Curve.n);
-  const oauthKeyPair = ed25519Curve.keyFromPrivate(oauthKey.toArrayLike(Buffer));
-  const metadataSigningKey = getSecpKeyFromEd25519(oauthKeyPair.getPrivate());
+  const encDataBase64 = bytesToBase64(utf8ToBytes(JSON.stringify(encData)));
+  const metadataPrivNonce = bytesToNumberBE(generatePrivateKey(KEY_TYPE.ED25519));
+  const oauthKey = mod(finalEd25519Key.scalar - metadataPrivNonce, N);
+  const oauthPub = ed25519Curve.Point.BASE.multiply(oauthKey).toAffine();
+  const metadataSigningKey = getSecpKeyFromEd25519(oauthKey);
   return {
-    oAuthKeyScalar: oauthKeyPair.getPrivate(),
-    oAuthPubX: oauthKeyPair.getPublic().getX(),
-    oAuthPubY: oauthKeyPair.getPublic().getY(),
-    SigningPubX: metadataSigningKey.point.getX(),
-    SigningPubY: metadataSigningKey.point.getY(),
+    oAuthKeyScalar: oauthKey,
+    oAuthPubX: oauthPub.x,
+    oAuthPubY: oauthPub.y,
+    SigningPubX: metadataSigningKey.point.x,
+    SigningPubY: metadataSigningKey.point.y,
     metadataNonce: metadataPrivNonce,
     metadataSigningKey: metadataSigningKey.scalar,
     encryptedSeed: encDataBase64,
@@ -111,116 +122,108 @@ export const generateEd25519KeyData = async (ed25519Seed: Buffer): Promise<Priva
   };
 };
 
-export const generateSecp256k1KeyData = async (scalarBuffer: Buffer): Promise<PrivateKeyData> => {
+export const generateSecp256k1KeyData = async (scalarBuffer: Uint8Array): Promise<PrivateKeyData> => {
   const secp256k1Curve = getKeyCurve(KEY_TYPE.SECP256K1);
+  const N = secp256k1Curve.Point.CURVE().n;
 
-  const scalar = new BN(scalarBuffer);
-  const randomNonce = new BN(generatePrivateKey(secp256k1Curve, Buffer));
-  const oAuthKey = scalar.sub(randomNonce).umod(secp256k1Curve.n);
-  const oAuthKeyPair = secp256k1Curve.keyFromPrivate(oAuthKey.toArrayLike(Buffer));
-  const oAuthPubKey = oAuthKeyPair.getPublic();
+  const scalar = bytesToNumberBE(scalarBuffer);
+  const randomNonce = bytesToNumberBE(generatePrivateKey(KEY_TYPE.SECP256K1));
+  const oAuthKey = mod(scalar - randomNonce, N);
+  const oAuthPub = secp256k1Curve.Point.BASE.multiply(oAuthKey).toAffine();
 
-  const finalUserKeyPair = secp256k1Curve.keyFromPrivate(scalar.toString("hex", 64), "hex");
+  const finalUserPub = secp256k1Curve.Point.BASE.multiply(scalar).toAffine();
 
   return {
-    oAuthKeyScalar: oAuthKeyPair.getPrivate(),
-    oAuthPubX: oAuthPubKey.getX(),
-    oAuthPubY: oAuthPubKey.getY(),
-    SigningPubX: oAuthPubKey.getX(),
-    SigningPubY: oAuthPubKey.getY(),
+    oAuthKeyScalar: oAuthKey,
+    oAuthPubX: oAuthPub.x,
+    oAuthPubY: oAuthPub.y,
+    SigningPubX: oAuthPub.x,
+    SigningPubY: oAuthPub.y,
     metadataNonce: randomNonce,
     encryptedSeed: "",
-    metadataSigningKey: oAuthKeyPair.getPrivate(),
-    finalUserPubKeyPoint: finalUserKeyPair.getPublic(),
+    metadataSigningKey: oAuthKey,
+    finalUserPubKeyPoint: finalUserPub,
   };
 };
 
-function generateAddressFromEcKey(keyType: KeyType, key: EC.KeyPair): string {
+function generateAddressFromPoint(keyType: KeyType, point: Point2D): string {
   if (keyType === KEY_TYPE.SECP256K1) {
-    const publicKey = key.getPublic().encode("hex", false).slice(2);
-    const evmAddressLower = `0x${keccak256(Buffer.from(publicKey, "hex")).slice(64 - 38)}`;
+    const uncompressed = bytesToHex(getSecp256k1().Point.fromAffine(point).toBytes(false));
+    const publicKey = uncompressed.slice(2); // remove 04 prefix
+    const evmAddressLower = `0x${keccak256(hexToBytes(publicKey)).slice(64 - 38)}`;
     return toChecksumAddress(evmAddressLower);
   } else if (keyType === KEY_TYPE.ED25519) {
-    const publicKey = encodeEd25519Point(key.getPublic());
+    const publicKey = encodeEd25519Point(point);
     const address = bs58.encode(publicKey);
     return address;
   }
   throw new Error(`Invalid keyType: ${keyType}`);
 }
 
-export function generateAddressFromPrivKey(keyType: KeyType, privateKey: BN): string {
+export function generateAddressFromPrivKey(keyType: KeyType, privateKey: bigint): string {
   const ecCurve = getKeyCurve(keyType);
-  const key = ecCurve.keyFromPrivate(privateKey.toString("hex", 64), "hex");
-  return generateAddressFromEcKey(keyType, key);
+  const point = ecCurve.Point.BASE.multiply(privateKey).toAffine();
+  return generateAddressFromPoint(keyType, point);
 }
 
-export function generateAddressFromPubKey(keyType: KeyType, publicKeyX: BN, publicKeyY: BN): string {
-  const ecCurve = getKeyCurve(keyType);
-  const key = ecCurve.keyFromPublic({ x: publicKeyX.toString("hex", 64), y: publicKeyY.toString("hex", 64) });
-  return generateAddressFromEcKey(keyType, key);
+export function generateAddressFromPubKey(keyType: KeyType, publicKeyX: bigint, publicKeyY: bigint): string {
+  return generateAddressFromPoint(keyType, { x: publicKeyX, y: publicKeyY });
 }
 
-export function getPostboxKeyFrom1OutOf1(ecCurve: EC, privKey: string, nonce: string): string {
-  const privKeyBN = new BN(privKey, 16);
-  const nonceBN = new BN(nonce, 16);
-  return privKeyBN.sub(nonceBN).umod(ecCurve.n).toString("hex");
+export function getPostboxKeyFrom1OutOf1(ecCurve: Curve, privKey: string, nonce: string): string {
+  const privKeyBI = toBigIntBE(privKey);
+  const nonceBI = toBigIntBE(nonce);
+  return bigintToHex(mod(privKeyBI - nonceBI, ecCurve.Point.CURVE().n));
 }
 
-export function derivePubKey(ecCurve: EC, sk: BN): curve.base.BasePoint {
-  const skHex = sk.toString(16, 64);
-  return ecCurve.keyFromPrivate(skHex, "hex").getPublic();
+export function derivePubKey(ecCurve: Curve, sk: bigint): Point2D {
+  return ecCurve.Point.BASE.multiply(sk).toAffine();
 }
-
-export const getEncryptionEC = (): EC => {
-  return new EC("secp256k1");
-};
 
 export const generateShares = async (
-  ecCurve: EC,
+  ecCurve: Curve,
   keyType: KeyType,
   serverTimeOffset: number,
   nodeIndexes: number[],
   nodePubkeys: INodePub[],
-  privKey: Buffer
+  privKey: Uint8Array
 ) => {
   const keyData = keyType === KEY_TYPE.ED25519 ? await generateEd25519KeyData(privKey) : await generateSecp256k1KeyData(privKey);
   const { metadataNonce, oAuthKeyScalar: oAuthKey, encryptedSeed, metadataSigningKey } = keyData;
   const threshold = ~~(nodePubkeys.length / 2) + 1;
   const degree = threshold - 1;
-  const nodeIndexesBn: BN[] = [];
+  const nodeIndexesBigInt: bigint[] = nodeIndexes.map((i) => BigInt(i));
 
-  for (const nodeIndex of nodeIndexes) {
-    nodeIndexesBn.push(new BN(nodeIndex));
-  }
-  const oAuthPubKey = ecCurve.keyFromPrivate(oAuthKey.toString("hex", 64), "hex").getPublic();
-  const poly = generateRandomPolynomial(ecCurve, degree, oAuthKey);
-  const shares = poly.generateShares(nodeIndexesBn);
+  const oAuthPub = ecCurve.Point.BASE.multiply(oAuthKey).toAffine();
+  const poly = generateRandomPolynomial(ecCurve, keyType, degree, oAuthKey);
+  const shares = poly.generateShares(nodeIndexesBigInt);
   const nonceParams = generateNonceMetadataParams(serverTimeOffset, "getOrSetNonce", metadataSigningKey, keyType, metadataNonce, encryptedSeed);
-  const nonceData = Buffer.from(stringify(nonceParams.set_data), "utf8").toString("base64");
+  const nonceData = bytesToBase64(utf8ToBytes(stringify(nonceParams.set_data)));
   const sharesData: ImportedShare[] = [];
   const encPromises: Promise<Ecies>[] = [];
-  for (let i = 0; i < nodeIndexesBn.length; i++) {
-    const shareJson = shares[nodeIndexesBn[i].toString("hex", 64)].toJSON() as Record<string, string>;
+  for (let i = 0; i < nodeIndexesBigInt.length; i++) {
+    const shareJson = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON() as Record<string, string>;
     if (!nodePubkeys[i]) {
-      throw new Error(`Missing node pub key for node index: ${nodeIndexesBn[i].toString("hex", 64)}`);
+      throw new Error(`Missing node pub key for node index: ${bigintToHex(nodeIndexesBigInt[i])}`);
     }
-    const nodePubKey = getEncryptionEC().keyFromPublic({ x: nodePubkeys[i].X, y: nodePubkeys[i].Y });
-    encPromises.push(
-      encrypt(Buffer.from(nodePubKey.getPublic().encodeCompressed("hex"), "hex"), Buffer.from(shareJson.share.padStart(64, "0"), "hex"))
-    );
+    const nodePubPoint = getSecp256k1().Point.fromAffine({
+      x: toBigIntBE(nodePubkeys[i].X),
+      y: toBigIntBE(nodePubkeys[i].Y),
+    });
+    encPromises.push(encrypt(nodePubPoint.toBytes(), hexToBytes(shareJson.share.padStart(64, "0"))));
   }
   const encShares = await Promise.all(encPromises);
-  for (let i = 0; i < nodeIndexesBn.length; i += 1) {
-    const shareJson = shares[nodeIndexesBn[i].toString("hex", 64)].toJSON() as Record<string, string>;
+  for (let i = 0; i < nodeIndexesBigInt.length; i += 1) {
+    const shareJson = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON() as Record<string, string>;
     const encParams = encShares[i];
     const encParamsMetadata = encParamsBufToHex(encParams);
     const shareData: ImportedShare = {
       encrypted_seed: keyData.encryptedSeed,
       final_user_point: keyData.finalUserPubKeyPoint,
-      oauth_pub_key_x: oAuthPubKey.getX().toString("hex"),
-      oauth_pub_key_y: oAuthPubKey.getY().toString("hex"),
-      signing_pub_key_x: keyData.SigningPubX.toString("hex"),
-      signing_pub_key_y: keyData.SigningPubY.toString("hex"),
+      oauth_pub_key_x: bigintToHex(oAuthPub.x),
+      oauth_pub_key_y: bigintToHex(oAuthPub.y),
+      signing_pub_key_x: bigintToHex(keyData.SigningPubX),
+      signing_pub_key_y: bigintToHex(keyData.SigningPubY),
       encrypted_share: encParamsMetadata.ciphertext,
       encrypted_share_metadata: encParamsMetadata,
       node_index: Number.parseInt(shareJson.shareIndex, 16),
