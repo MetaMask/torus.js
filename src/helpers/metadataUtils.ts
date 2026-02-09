@@ -93,13 +93,14 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
     timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
   const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
-  const sig = ecCurve.sign(msgHash, hexToBytes(bigintToHex(privateKey)));
+  // metadata only uses secp for sig validation; prehash: false because msgHash is already hashed
+  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
   const pubKey = ecCurve.Point.BASE.multiply(privateKey).toAffine();
   return {
     pub_key_X: pubKey.x.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     pub_key_Y: pubKey.y.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     set_data: setData,
-    signature: bytesToBase64(concatBytes(hexToBytes("00"), sig)),
+    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
   };
 }
 
@@ -145,14 +146,14 @@ export function generateNonceMetadataParams(
   }
 
   const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
-  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)));
+  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
   const pubKey = secp256k1.Point.BASE.multiply(privateKey).toAffine();
   return {
     pub_key_X: bigintToHex(pubKey.x),
     pub_key_Y: bigintToHex(pubKey.y),
     set_data: setData,
     key_type: keyType,
-    signature: bytesToBase64(concatBytes(hexToBytes("00"), sig)),
+    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
   };
 }
 
@@ -256,14 +257,14 @@ export async function getOrSetSapphireMetadataNonce(
       timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
     };
     const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
-    const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privKey)));
+    const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privKey)), { prehash: false });
     const pubKey = secp256k1.Point.BASE.multiply(privKey).toAffine();
     data = {
       ...data,
       pub_key_X: bigintToHex(pubKey.x),
       pub_key_Y: bigintToHex(pubKey.y),
       set_data: setData,
-      signature: bytesToBase64(concatBytes(hexToBytes("00"), sig)),
+      signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
     };
   }
 
