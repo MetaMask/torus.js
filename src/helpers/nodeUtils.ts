@@ -1,9 +1,6 @@
 import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
 import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
-import BN from "bn.js";
-import { curve, ec } from "elliptic";
-import { getRandomBytes } from "ethereum-cryptography/random";
 
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
@@ -17,6 +14,7 @@ import {
   JRPCResponse,
   KeyLookupResult,
   KeyType,
+  Point2D,
   SessionToken,
   ShareRequestResult,
   TorusKey,
@@ -30,15 +28,25 @@ import log from "../loglevel";
 import { Some } from "../some";
 import { TorusUtilsExtraParams } from "../TorusUtilsExtraParams";
 import {
+  base64ToBytes,
+  bigintToHex,
+  bytesToBase64,
+  bytesToHex,
+  bytesToNumberBE,
   calculateMedian,
+  Curve,
   generatePrivateKey,
   getProxyCoordinatorEndpointIndex,
+  hexToBytes,
   kCombinations,
   keccak256,
+  mod,
   normalizeKeysResult,
   normalizeLookUpResult,
   retryCommitment,
   thresholdSame,
+  toBigIntBE,
+  utf8ToBytes,
 } from "./common";
 import { derivePubKey, generateAddressFromPrivKey, generateAddressFromPubKey, generateShares } from "./keyUtils";
 import { lagrangeInterpolation } from "./langrangeInterpolatePoly";
@@ -232,7 +240,7 @@ const commitmentRequest = async (params: {
   overrideExistingKey: boolean;
 }): Promise<(void | JRPCResponse<CommitmentRequestResult>)[]> => {
   const { idToken, endpoints, indexes, keyType, verifier, verifierParams, pubKeyX, pubKeyY, finalImportedShares, overrideExistingKey } = params;
-  const tokenCommitment = keccak256(Buffer.from(idToken, "utf8"));
+  const tokenCommitment = keccak256(utf8ToBytes(idToken));
   const threeFourthsThreshold = ~~((endpoints.length * 3) / 4) + 1;
   const halfThreshold = ~~(endpoints.length / 2) + 1;
 
@@ -352,7 +360,7 @@ export async function retrieveOrImportShare(params: {
   legacyMetadataHost: string;
   serverTimeOffset: number;
   enableOneKey: boolean;
-  ecCurve: ec;
+  ecCurve: Curve;
   keyType: KeyType;
   allowHost: string;
   network: TORUS_NETWORK_TYPE;
@@ -406,7 +414,7 @@ export async function retrieveOrImportShare(params: {
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();
-  const pubKey = getPublic(sessionAuthKey).toString("hex");
+  const pubKey = bytesToHex(getPublic(sessionAuthKey));
   const sessionPubX = pubKey.slice(2, 66);
   const sessionPubY = pubKey.slice(66);
   let finalImportedShares: ImportedShare[] = [];
@@ -418,8 +426,8 @@ export async function retrieveOrImportShare(params: {
     }
     finalImportedShares = newImportedShares;
   } else if (!useDkg) {
-    const bufferKey = keyType === KEY_TYPE.SECP256K1 ? generatePrivateKey(ecCurve, Buffer) : await getRandomBytes(32);
-    const generatedShares = await generateShares(ecCurve, keyType, serverTimeOffset, indexes, nodePubkeys, Buffer.from(bufferKey));
+    const privateKey = keyType === KEY_TYPE.SECP256K1 ? generatePrivateKey(KEY_TYPE.SECP256K1) : generatePrivateKey(KEY_TYPE.ED25519);
+    const generatedShares = await generateShares(ecCurve, keyType, serverTimeOffset, indexes, nodePubkeys, privateKey);
     finalImportedShares = [...finalImportedShares, ...generatedShares];
   }
 
@@ -549,11 +557,11 @@ export async function retrieveOrImportShare(params: {
   return Some<
     void | JRPCResponse<ShareRequestResult> | JRPCResponse<ShareRequestResult[]>,
     | {
-        privateKey: BN;
+        privateKey: bigint;
         sessionTokenData: SessionToken[];
         thresholdNonceData: GetOrSetNonceResult;
         thresholdPubKey: ExtendedPublicKey;
-        nodeIndexes: BN[];
+        nodeIndexes: bigint[];
         isNewKey: boolean;
         serverTimeOffsetResponse?: number;
       }
@@ -615,10 +623,10 @@ export async function retrieveOrImportShare(params: {
     // this is matched against the user public key to ensure that shares are consistent
     // Note: no need of thresholdMetadataNonce for extended_verifier_id key
     if (completedRequests.length >= thresholdReqCount && thresholdPublicKey) {
-      const sharePromises: Promise<void | Buffer>[] = [];
-      const sessionTokenSigPromises: Promise<void | Buffer>[] = [];
-      const sessionTokenPromises: Promise<void | Buffer>[] = [];
-      const nodeIndexes: BN[] = [];
+      const sharePromises: Promise<void | Uint8Array>[] = [];
+      const sessionTokenSigPromises: Promise<void | Uint8Array>[] = [];
+      const sessionTokenPromises: Promise<void | Uint8Array>[] = [];
+      const nodeIndexes: bigint[] = [];
       const sessionTokenData: SessionToken[] = [];
       const isNewKeyResponses: {
         isNewKey: string;
@@ -653,7 +661,7 @@ export async function retrieveOrImportShare(params: {
               )
             );
           } else {
-            sessionTokenSigPromises.push(Promise.resolve(Buffer.from(sessionTokenSigs[0], "hex")));
+            sessionTokenSigPromises.push(Promise.resolve(hexToBytes(sessionTokenSigs[0])));
           }
         } else {
           sessionTokenSigPromises.push(Promise.resolve(undefined));
@@ -668,7 +676,7 @@ export async function retrieveOrImportShare(params: {
               )
             );
           } else {
-            sessionTokenPromises.push(Promise.resolve(Buffer.from(sessionTokens[0], "base64")));
+            sessionTokenPromises.push(Promise.resolve(base64ToBytes(sessionTokens[0])));
           }
         } else {
           sessionTokenPromises.push(Promise.resolve(undefined));
@@ -676,10 +684,10 @@ export async function retrieveOrImportShare(params: {
 
         if (keys?.length > 0) {
           const latestKey = currentShareResponse.result.keys[0];
-          nodeIndexes.push(new BN(latestKey.node_index));
+          nodeIndexes.push(BigInt(latestKey.node_index));
           if (latestKey.share_metadata) {
             sharePromises.push(
-              decryptNodeDataWithPadding(latestKey.share_metadata, Buffer.from(latestKey.share, "base64").toString("binary"), sessionAuthKey).catch(
+              decryptNodeDataWithPadding(latestKey.share_metadata, new TextDecoder().decode(base64ToBytes(latestKey.share)), sessionAuthKey).catch(
                 (err) => log.error("share decryption", err)
               )
             );
@@ -718,8 +726,8 @@ export async function retrieveOrImportShare(params: {
         if (!x || !sessionSigsResolved[index]) sessionTokenData.push(undefined);
         else
           sessionTokenData.push({
-            token: x.toString("base64"),
-            signature: (sessionSigsResolved[index] as Buffer).toString("hex"),
+            token: bytesToBase64(x as Uint8Array),
+            signature: bytesToHex(sessionSigsResolved[index] as Uint8Array),
             node_pubx: (completedRequests[index] as JRPCResponse<ShareRequestResult>).result.node_pubx,
             node_puby: (completedRequests[index] as JRPCResponse<ShareRequestResult>).result.node_puby,
           });
@@ -730,16 +738,16 @@ export async function retrieveOrImportShare(params: {
       const decryptedShares = sharesResolved.reduce(
         (acc, curr, index) => {
           if (curr) {
-            acc.push({ index: nodeIndexes[index], value: new BN(curr) });
+            acc.push({ index: nodeIndexes[index], value: bytesToNumberBE(curr as Uint8Array) });
           }
           return acc;
         },
-        [] as { index: BN; value: BN }[]
+        [] as { index: bigint; value: bigint }[]
       );
       // run lagrange interpolation on all subsets, faster in the optimistic scenario than berlekamp-welch due to early exit
       const allCombis = kCombinations(decryptedShares.length, halfThreshold);
 
-      let privateKey: BN | null = null;
+      let privateKey: bigint | null = null;
       for (let j = 0; j < allCombis.length; j += 1) {
         const currentCombi = allCombis[j];
         const currentCombiShares = decryptedShares.filter((_, index) => currentCombi.includes(index));
@@ -748,10 +756,10 @@ export async function retrieveOrImportShare(params: {
         const derivedPrivateKey = lagrangeInterpolation(ecCurve, shares, indices);
         if (!derivedPrivateKey) continue;
         const decryptedPubKey = derivePubKey(ecCurve, derivedPrivateKey);
-        const decryptedPubKeyX = decryptedPubKey.getX();
-        const decryptedPubKeyY = decryptedPubKey.getY();
+        const decryptedPubKeyX = decryptedPubKey.x;
+        const decryptedPubKeyY = decryptedPubKey.y;
 
-        if (decryptedPubKeyX.cmp(new BN(thresholdPublicKey.X, 16)) === 0 && decryptedPubKeyY.cmp(new BN(thresholdPublicKey.Y, 16)) === 0) {
+        if (decryptedPubKeyX === toBigIntBE(thresholdPublicKey.X) && decryptedPubKeyY === toBigIntBE(thresholdPublicKey.Y)) {
           privateKey = derivedPrivateKey;
           break;
         }
@@ -794,8 +802,8 @@ export async function retrieveOrImportShare(params: {
 
     const oAuthKey = privateKey;
     const oAuthPubKey = derivePubKey(ecCurve, oAuthKey);
-    const oAuthPubkeyX = oAuthPubKey.getX().toString("hex", 64);
-    const oAuthPubkeyY = oAuthPubKey.getY().toString("hex", 64);
+    const oAuthPubkeyX = bigintToHex(oAuthPubKey.x);
+    const oAuthPubkeyY = bigintToHex(oAuthPubKey.y);
 
     // if both thresholdNonceData and extended_verifier_id are not available
     // then we need to throw other wise address would be incorrect.
@@ -811,53 +819,50 @@ export async function retrieveOrImportShare(params: {
         );
       }
     }
-    let metadataNonce = new BN(nonceResult?.nonce ? nonceResult.nonce.padStart(64, "0") : "0", "hex");
-    let finalPubKey: curve.base.BasePoint;
+    let metadataNonce = nonceResult?.nonce ? toBigIntBE(nonceResult.nonce) : 0n;
+    let finalPubKey: Point2D;
     let pubNonce: { X: string; Y: string } | undefined;
     let typeOfUser: UserType = "v1";
+    const N = ecCurve.Point.CURVE().n;
     // extended_verifier_id is only exception for torus-test-health verifier
     // otherwise extended verifier id should not even return shares.
     if (verifierParams.extended_verifier_id) {
       typeOfUser = "v2";
       // for tss key no need to add pub nonce
-      finalPubKey = ecCurve.keyFromPublic({ x: oAuthPubkeyX, y: oAuthPubkeyY }).getPublic();
+      finalPubKey = oAuthPubKey;
     } else if (LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
       if (enableOneKey) {
         nonceResult = await getOrSetNonce(legacyMetadataHost, ecCurve, serverTimeOffsetResponse, oAuthPubkeyX, oAuthPubkeyY, oAuthKey, !isNewKey);
-        metadataNonce = new BN(nonceResult.nonce || "0", 16);
+        metadataNonce = nonceResult.nonce ? toBigIntBE(nonceResult.nonce) : 0n;
         typeOfUser = nonceResult.typeOfUser;
         if (typeOfUser === "v2") {
           pubNonce = { X: (nonceResult as v2NonceResultType).pubNonce.x, Y: (nonceResult as v2NonceResultType).pubNonce.y };
-          finalPubKey = ecCurve
-            .keyFromPublic({ x: oAuthPubkeyX, y: oAuthPubkeyY })
-            .getPublic()
-            .add(
-              ecCurve
-                .keyFromPublic({ x: (nonceResult as v2NonceResultType).pubNonce.x, y: (nonceResult as v2NonceResultType).pubNonce.y })
-                .getPublic()
-            );
+          const noncePubKey = {
+            x: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.x),
+            y: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.y),
+          };
+          finalPubKey = ecCurve.Point.fromAffine(oAuthPubKey).add(ecCurve.Point.fromAffine(noncePubKey)).toAffine();
         } else {
           typeOfUser = "v1";
           // for imported keys in legacy networks
           metadataNonce = await getMetadata(legacyMetadataHost, { pub_key_X: oAuthPubkeyX, pub_key_Y: oAuthPubkeyY });
-          const privateKeyWithNonce = oAuthKey.add(metadataNonce).umod(ecCurve.n);
-          finalPubKey = ecCurve.keyFromPrivate(privateKeyWithNonce.toString(16, 64), "hex").getPublic();
+          const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
+          finalPubKey = ecCurve.Point.BASE.multiply(privateKeyWithNonce).toAffine();
         }
       } else {
         typeOfUser = "v1";
         // for imported keys in legacy networks
         metadataNonce = await getMetadata(legacyMetadataHost, { pub_key_X: oAuthPubkeyX, pub_key_Y: oAuthPubkeyY });
-        const privateKeyWithNonce = oAuthKey.add(metadataNonce).umod(ecCurve.n);
-        finalPubKey = ecCurve.keyFromPrivate(privateKeyWithNonce.toString(16, 64), "hex").getPublic();
+        const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
+        finalPubKey = ecCurve.Point.BASE.multiply(privateKeyWithNonce).toAffine();
       }
     } else {
       typeOfUser = "v2";
-      finalPubKey = ecCurve
-        .keyFromPublic({ x: oAuthPubkeyX, y: oAuthPubkeyY })
-        .getPublic()
-        .add(
-          ecCurve.keyFromPublic({ x: (nonceResult as v2NonceResultType).pubNonce.x, y: (nonceResult as v2NonceResultType).pubNonce.y }).getPublic()
-        );
+      const noncePubKey = {
+        x: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.x),
+        y: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.y),
+      };
+      finalPubKey = ecCurve.Point.fromAffine(oAuthPubKey).add(ecCurve.Point.fromAffine(noncePubKey)).toAffine();
       pubNonce = { X: (nonceResult as v2NonceResultType).pubNonce.x, Y: (nonceResult as v2NonceResultType).pubNonce.y };
     }
 
@@ -870,17 +875,17 @@ export async function retrieveOrImportShare(params: {
     const oAuthKeyAddress = generateAddressFromPrivKey(keyType, oAuthKey);
     // deriving address from pub key coz pubkey is always available
     // but finalPrivKey won't be available for  v2 user upgraded to 2/n
-    const finalWalletAddress = generateAddressFromPubKey(keyType, finalPubKey.getX(), finalPubKey.getY());
+    const finalWalletAddress = generateAddressFromPubKey(keyType, finalPubKey.x, finalPubKey.y);
     let keyWithNonce = "";
     if (typeOfUser === "v1") {
       isUpgraded = null;
     } else if (typeOfUser === "v2") {
-      isUpgraded = metadataNonce.eq(new BN("0"));
+      isUpgraded = metadataNonce === 0n;
     }
 
-    if (typeOfUser === "v1" || (typeOfUser === "v2" && metadataNonce.gt(new BN(0)))) {
-      const privateKeyWithNonce = oAuthKey.add(metadataNonce).umod(ecCurve.n);
-      keyWithNonce = privateKeyWithNonce.toString("hex", 64);
+    if (typeOfUser === "v1" || (typeOfUser === "v2" && metadataNonce > 0n)) {
+      const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
+      keyWithNonce = bigintToHex(privateKeyWithNonce);
     }
     if (keyType === KEY_TYPE.SECP256K1) {
       finalPrivKey = keyWithNonce;
@@ -889,8 +894,8 @@ export async function retrieveOrImportShare(params: {
         throw new Error("Invalid data, seed data is missing for ed25519 key, Please report this bug");
       } else if (keyWithNonce && nonceResult.seed) {
         // console.log("nonceResult.seed", nonceResult.seed, keyWithNonce);
-        const decryptedSeed = await decryptSeedData(nonceResult.seed, new BN(keyWithNonce, "hex"));
-        finalPrivKey = decryptedSeed.toString("hex");
+        const decryptedSeed = await decryptSeedData(nonceResult.seed, toBigIntBE(keyWithNonce));
+        finalPrivKey = bytesToHex(decryptedSeed);
       }
     } else {
       throw new Error(`Invalid keyType: ${keyType}`);
@@ -902,8 +907,8 @@ export async function retrieveOrImportShare(params: {
     if (keyType === KEY_TYPE.ED25519) {
       const { scalar, point } = getSecpKeyFromEd25519(privateKey);
       postboxKey = scalar;
-      postboxPubX = point.getX().toString(16, 64);
-      postboxPubY = point.getY().toString(16, 64);
+      postboxPubX = bigintToHex(point.x);
+      postboxPubY = bigintToHex(point.y);
       if (thresholdPubKey.SignerX.padStart(64, "0") !== postboxPubX || thresholdPubKey.SignerY.padStart(64, "0") !== postboxPubY) {
         throw new Error("Invalid postbox key");
       }
@@ -912,24 +917,24 @@ export async function retrieveOrImportShare(params: {
     return {
       finalKeyData: {
         walletAddress: finalWalletAddress,
-        X: finalPubKey.getX().toString(16, 64), // this is final pub x user before and after updating to 2/n
-        Y: finalPubKey.getY().toString(16, 64), // this is final pub y user before and after updating to 2/n
+        X: bigintToHex(finalPubKey.x), // this is final pub x user before and after updating to 2/n
+        Y: bigintToHex(finalPubKey.y), // this is final pub y user before and after updating to 2/n
         privKey: finalPrivKey,
       },
       oAuthKeyData: {
         walletAddress: oAuthKeyAddress,
         X: oAuthPubkeyX,
         Y: oAuthPubkeyY,
-        privKey: oAuthKey.toString("hex", 64),
+        privKey: bigintToHex(oAuthKey),
       },
       postboxKeyData: {
-        privKey: postboxKey.toString("hex", 64),
+        privKey: bigintToHex(postboxKey),
         X: postboxPubX,
         Y: postboxPubY,
       },
       sessionData: {
         sessionTokenData,
-        sessionAuthKey: sessionAuthKey.toString("hex").padStart(64, "0"),
+        sessionAuthKey: bytesToHex(sessionAuthKey),
       },
       metadata: {
         pubNonce,
@@ -939,7 +944,7 @@ export async function retrieveOrImportShare(params: {
         serverTimeOffset: serverTimeOffsetResponse,
       },
       nodesData: {
-        nodeIndexes: nodeIndexes.map((x) => x.toNumber()),
+        nodeIndexes: nodeIndexes.map((x) => Number(x)),
       },
     } as TorusKey;
   });
