@@ -1,32 +1,35 @@
-import BN from "bn.js";
-import { ec as EC } from "elliptic";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { concatBytes, hexToBytes } from "@noble/curves/utils.js";
 
-import { BNString } from "./interfaces";
+import { bigintToHex, toBigIntBE } from "./helpers/common";
+import { BigIntString, KeyType } from "./interfaces";
 
 class Point {
-  x: BN;
+  x: bigint;
 
-  y: BN;
+  y: bigint;
 
-  ecCurve: EC;
+  keyType: KeyType;
 
-  constructor(x: BNString, y: BNString, ecCurve: EC) {
-    this.x = new BN(x, "hex");
-    this.y = new BN(y, "hex");
-    this.ecCurve = ecCurve;
+  constructor(x: BigIntString, y: BigIntString, keyType: KeyType) {
+    this.x = toBigIntBE(x);
+    this.y = toBigIntBE(y);
+    this.keyType = keyType;
   }
 
-  encode(enc: string): Buffer {
+  encode(enc: string): Uint8Array {
     switch (enc) {
       case "arr":
-        return Buffer.concat([
-          Buffer.from("04", "hex"),
-          Buffer.from(this.x.toString("hex", 64), "hex"),
-          Buffer.from(this.y.toString("hex", 64), "hex"),
-        ]);
+        return concatBytes(hexToBytes("04"), hexToBytes(bigintToHex(this.x)), hexToBytes(bigintToHex(this.y)));
       case "elliptic-compressed": {
-        const key = this.ecCurve.keyFromPublic({ x: this.x.toString("hex", 64), y: this.y.toString("hex", 64) }, "hex");
-        return Buffer.from(key.getPublic(true, "hex"));
+        if (this.keyType === "secp256k1") {
+          const point = secp256k1.Point.fromAffine({ x: this.x, y: this.y });
+          return point.toBytes();
+        }
+        // ed25519: standard compressed encoding (y in LE + x sign bit)
+        const point = ed25519.Point.fromAffine({ x: this.x, y: this.y });
+        return point.toBytes();
       }
       default:
         throw new Error("encoding doesn't exist in Point");

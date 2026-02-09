@@ -1,9 +1,9 @@
 import type { INodePub, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
-import BN from "bn.js";
-import { curve } from "elliptic";
 
 import { TorusUtilsExtraParams } from "./TorusUtilsExtraParams";
+
+export type Point2D = { x: bigint; y: bigint };
 
 export interface KeyIndex {
   index: string;
@@ -151,7 +151,7 @@ export interface ShareRequestResult {
 export interface ImportedShare {
   oauth_pub_key_x: string;
   oauth_pub_key_y: string;
-  final_user_point: curve.base.BasePoint;
+  final_user_point: Point2D;
   signing_pub_key_x: string;
   signing_pub_key_y: string;
   encrypted_share: string;
@@ -185,7 +185,7 @@ export interface TorusPublicKey {
   };
   metadata: {
     pubNonce?: { X: string; Y: string };
-    nonce?: BN;
+    nonce?: bigint;
     typeOfUser: UserType;
     upgraded: boolean | null;
     serverTimeOffset: number;
@@ -222,7 +222,7 @@ export interface VerifierParams {
   extended_verifier_id?: string;
 }
 
-export type BNString = string | BN;
+export type BigIntString = string | bigint;
 
 export type StringifiedType = Record<string, unknown>;
 
@@ -243,14 +243,14 @@ export interface MetadataParams {
 }
 
 export interface PrivateKeyData {
-  oAuthKeyScalar: BN;
-  oAuthPubX: BN;
-  oAuthPubY: BN;
-  SigningPubX: BN;
-  SigningPubY: BN;
-  metadataNonce: BN;
-  metadataSigningKey: BN;
-  finalUserPubKeyPoint: curve.base.BasePoint;
+  oAuthKeyScalar: bigint;
+  oAuthPubX: bigint;
+  oAuthPubY: bigint;
+  SigningPubX: bigint;
+  SigningPubY: bigint;
+  metadataNonce: bigint;
+  metadataSigningKey: bigint;
+  finalUserPubKeyPoint: Point2D;
   encryptedSeed?: string;
 }
 
