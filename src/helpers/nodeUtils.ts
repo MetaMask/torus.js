@@ -1,6 +1,6 @@
-import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, SIGNER_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
-import { generateJsonRPCObject, post } from "@toruslabs/http-helpers";
+import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
 
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
@@ -400,19 +400,35 @@ export async function retrieveOrImportShare(params: {
     source,
     authorizationServerUrl,
   } = params;
-  await post<void>(
-    authorizationServerUrl,
-    {
-      verifier,
-      verifier_id: verifierParams.verifier_id,
-      network,
-      client_id: clientId,
-      enable_gating: "true",
-      ...(source ? { source } : {}),
-    },
-    {},
-    { useAPIKey: true }
-  );
+  if (authorizationServerUrl) {
+    await post<void>(
+      authorizationServerUrl,
+      {
+        verifier,
+        verifier_id: verifierParams.verifier_id,
+        network,
+        client_id: clientId,
+        enable_gating: "true",
+        ...(source ? { source } : {}),
+      },
+      {},
+      { useAPIKey: true }
+    );
+  } else {
+    await get<void>(
+      `${SIGNER_MAP[network]}/api/allow`,
+      {
+        headers: {
+          verifier,
+          verifierid: verifierParams.verifier_id,
+          network,
+          clientid: clientId,
+          enablegating: "true",
+        },
+      },
+      { useAPIKey: true }
+    );
+  }
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();

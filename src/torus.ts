@@ -1,12 +1,4 @@
-import {
-  INodePub,
-  KEY_TYPE,
-  LEGACY_NETWORKS_ROUTE_MAP,
-  METADATA_MAP,
-  SIGNER_MAP,
-  TORUS_LEGACY_NETWORK_TYPE,
-  TORUS_NETWORK_TYPE,
-} from "@toruslabs/constants";
+import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, METADATA_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
 
 import { config } from "./config";
@@ -61,7 +53,7 @@ class Torus {
 
   private source?: string;
 
-  private authorizationServerUrl: string;
+  private authorizationServerUrl?: string;
 
   constructor({
     enableOneKey = false,
@@ -86,7 +78,7 @@ class Torus {
     this.enableOneKey = enableOneKey;
     this.legacyMetadataHost = legacyMetadataHost || METADATA_MAP[network as TORUS_LEGACY_NETWORK_TYPE];
     this.source = source;
-    this.authorizationServerUrl = authorizationServerUrl || `${SIGNER_MAP[network]}/api/allow`;
+    this.authorizationServerUrl = authorizationServerUrl;
   }
 
   static enableLogging(v = true): void {
