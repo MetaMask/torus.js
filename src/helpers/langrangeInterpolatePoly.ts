@@ -76,7 +76,7 @@ const lagrange = (ecCurve: Curve, unsortedPoints: Point[]) => {
       polynomial[k] = mod(polynomial[k] + tmp, n);
     }
   }
-  return new Polynomial(polynomial, n);
+  return new Polynomial(polynomial, ecCurve);
 };
 
 export function lagrangeInterpolatePolynomial(ecCurve: Curve, points: Point[]): Polynomial {
@@ -115,7 +115,6 @@ export function generateRandomPolynomial(
   secret?: bigint,
   deterministicShares?: Share[]
 ): Polynomial {
-  const n = ecCurve.Point.CURVE().n;
   const actualS = secret !== undefined ? secret : generatePrivateExcludingIndexes([0n], keyType);
   if (!deterministicShares) {
     const poly: bigint[] = [actualS];
@@ -123,7 +122,7 @@ export function generateRandomPolynomial(
       const share = generatePrivateExcludingIndexes(poly, keyType);
       poly.push(share);
     }
-    return new Polynomial(poly, n);
+    return new Polynomial(poly, ecCurve);
   }
   if (!Array.isArray(deterministicShares)) {
     throw new Error("deterministic shares in generateRandomPolynomial should be an array");

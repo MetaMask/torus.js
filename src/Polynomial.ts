@@ -1,6 +1,6 @@
 import { mod } from "@noble/curves/abstract/modular.js";
 
-import { bigintToHex, toBigIntBE } from "./helpers/common";
+import { bigintToHex, Curve, toBigIntBE } from "./helpers/common";
 import { BigIntString } from "./interfaces";
 import Share from "./Share";
 
@@ -11,11 +11,11 @@ export type ShareMap = {
 class Polynomial {
   polynomial: bigint[];
 
-  curveOrder: bigint;
+  ecCurve: Curve;
 
-  constructor(polynomial: bigint[], curveOrder: bigint) {
+  constructor(polynomial: bigint[], ecCurve: Curve) {
     this.polynomial = polynomial;
-    this.curveOrder = curveOrder;
+    this.ecCurve = ecCurve;
   }
 
   getThreshold(): number {
@@ -23,13 +23,14 @@ class Polynomial {
   }
 
   polyEval(x: BigIntString): bigint {
+    const n = this.ecCurve.Point.CURVE().n;
     const tmpX = toBigIntBE(x);
     let xi = tmpX;
     let sum = this.polynomial[0];
     for (let i = 1; i < this.polynomial.length; i += 1) {
       const tmp = xi * this.polynomial[i];
-      sum = mod(sum + tmp, this.curveOrder);
-      xi = mod(xi * tmpX, this.curveOrder);
+      sum = mod(sum + tmp, n);
+      xi = mod(xi * tmpX, n);
     }
     return sum;
   }
