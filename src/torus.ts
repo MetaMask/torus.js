@@ -404,9 +404,8 @@ class Torus {
       }
       if (nonceResult.typeOfUser === "v1") {
         nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-        finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
-          .add(localEc.Point.BASE.multiply(nonce))
-          .toAffine();
+        const oAuthPoint = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) });
+        finalPubKey = nonce > 0n ? oAuthPoint.add(localEc.Point.BASE.multiply(nonce)).toAffine() : oAuthPoint.toAffine();
       } else if (nonceResult.typeOfUser === "v2") {
         finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
           .add(localEc.Point.fromAffine({ x: toBigIntBE(nonceResult.pubNonce.x), y: toBigIntBE(nonceResult.pubNonce.y) }))
@@ -418,9 +417,8 @@ class Torus {
     } else {
       typeOfUser = "v1";
       nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-      finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
-        .add(localEc.Point.BASE.multiply(nonce))
-        .toAffine();
+      const oAuthPoint = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) });
+      finalPubKey = nonce > 0n ? oAuthPoint.add(localEc.Point.BASE.multiply(nonce)).toAffine() : oAuthPoint.toAffine();
     }
 
     if (!oAuthPubKey) {
