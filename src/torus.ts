@@ -8,11 +8,12 @@ import {
   TORUS_NETWORK_TYPE,
 } from "@toruslabs/constants";
 import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
-import BN from "bn.js";
-import { curve, ec as EC } from "elliptic";
 
 import { config } from "./config";
 import {
+  bigintToHex,
+  bytesToHex,
+  Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
   generateShares,
@@ -23,12 +24,14 @@ import {
   GetOrSetNonceError,
   GetPubKeyOrKeyAssign,
   retrieveOrImportShare,
+  toBigIntBE,
 } from "./helpers";
 import {
   GetOrSetNonceResult,
   ImportKeyParams,
   KeyType,
   LegacyVerifierLookupResponse,
+  Point2D,
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
@@ -50,7 +53,7 @@ class Torus {
 
   public clientId: string;
 
-  public ec: EC;
+  public ec: Curve;
 
   public enableOneKey: boolean;
 
@@ -73,7 +76,7 @@ class Torus {
       throw new Error(`keyType: ${keyType} is not supported by ${network} network`);
     }
     this.keyType = keyType;
-    this.ec = new EC(this.keyType);
+    this.ec = getKeyCurve(this.keyType);
     this.serverTimeOffset = serverTimeOffset || 0; // ms
     this.network = network;
     this.clientId = clientId;
@@ -224,7 +227,7 @@ class Torus {
       const ed25519PubKey = encodeEd25519Point(ed25519Key.point);
       const encodedPubKey = encodeEd25519Point(sharesData[0].final_user_point);
       const importedPubKey = Buffer.from(ed25519PubKey).toString("hex");
-      const derivedPubKey = encodedPubKey.toString("hex");
+      const derivedPubKey = bytesToHex(encodedPubKey);
       if (importedPubKey !== derivedPubKey) {
         throw new Error("invalid shares data for ed25519 key, public key is not matching after generating shares");
       }
@@ -307,12 +310,12 @@ class Torus {
     }
     const { pub_key_X: X, pub_key_Y: Y } = keyResult.keys[0];
     let pubNonce: { X: string; Y: string } | undefined;
-    const nonce = new BN(nonceResult?.nonce || "0", 16);
-    let oAuthPubKey: curve.base.BasePoint;
-    let finalPubKey: curve.base.BasePoint;
+    const nonce = toBigIntBE(nonceResult?.nonce || "0");
+    let oAuthPubKey: Point2D;
+    let finalPubKey: Point2D;
     if (extendedVerifierId) {
       // for tss key no need to add pub nonce
-      finalPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
+      finalPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
       oAuthPubKey = finalPubKey;
     } else if (LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
       return this.formatLegacyPublicKeyData({
@@ -325,11 +328,10 @@ class Torus {
       });
     } else {
       const v2NonceResult = nonceResult as v2NonceResultType;
-      oAuthPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
-      finalPubKey = localEc
-        .keyFromPublic({ x: X, y: Y })
-        .getPublic()
-        .add(localEc.keyFromPublic({ x: v2NonceResult.pubNonce.x, y: v2NonceResult.pubNonce.y }).getPublic());
+      oAuthPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
+      finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+        .add(localEc.Point.fromAffine({ x: toBigIntBE(v2NonceResult.pubNonce.x), y: toBigIntBE(v2NonceResult.pubNonce.y) }))
+        .toAffine();
 
       pubNonce = { X: v2NonceResult.pubNonce.x, Y: v2NonceResult.pubNonce.y };
     }
@@ -337,16 +339,16 @@ class Torus {
     if (!oAuthPubKey) {
       throw new Error("Unable to derive oAuthPubKey");
     }
-    const oAuthX = oAuthPubKey.getX().toString(16, 64);
-    const oAuthY = oAuthPubKey.getY().toString(16, 64);
-    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.getX(), oAuthPubKey.getY());
+    const oAuthX = bigintToHex(oAuthPubKey.x);
+    const oAuthY = bigintToHex(oAuthPubKey.y);
+    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.x, oAuthPubKey.y);
 
     if (!finalPubKey) {
       throw new Error("Unable to derive finalPubKey");
     }
-    const finalX = finalPubKey ? finalPubKey.getX().toString(16, 64) : "";
-    const finalY = finalPubKey ? finalPubKey.getY().toString(16, 64) : "";
-    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.getX(), finalPubKey.getY()) : "";
+    const finalX = finalPubKey ? bigintToHex(finalPubKey.x) : "";
+    const finalY = finalPubKey ? bigintToHex(finalPubKey.y) : "";
+    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.x, finalPubKey.y) : "";
     return {
       oAuthKeyData: {
         walletAddress: oAuthAddress,
@@ -384,33 +386,31 @@ class Torus {
 
     const { pub_key_X: X, pub_key_Y: Y } = finalKeyResult.keys[0];
     let nonceResult: GetOrSetNonceResult;
-    let nonce: BN;
-    let finalPubKey: curve.base.BasePoint;
+    let nonce: bigint;
+    let finalPubKey: Point2D;
     let typeOfUser: GetOrSetNonceResult["typeOfUser"];
     let pubNonce: { X: string; Y: string } | undefined;
 
-    const oAuthPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
+    const oAuthPubKey: Point2D = { x: toBigIntBE(X), y: toBigIntBE(Y) };
 
     const finalServerTimeOffset = this.serverTimeOffset || serverTimeOffset;
     if (enableOneKey) {
       try {
         nonceResult = await getOrSetNonce(this.legacyMetadataHost, localEc, finalServerTimeOffset, X, Y, undefined, !isNewKey);
-        nonce = new BN(nonceResult.nonce || "0", 16);
+        nonce = toBigIntBE(nonceResult.nonce || "0");
         typeOfUser = nonceResult.typeOfUser;
       } catch {
         throw new GetOrSetNonceError();
       }
       if (nonceResult.typeOfUser === "v1") {
         nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-        finalPubKey = localEc
-          .keyFromPublic({ x: X, y: Y })
-          .getPublic()
-          .add(localEc.keyFromPrivate(nonce.toString(16, 64), "hex").getPublic());
+        finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+          .add(localEc.Point.BASE.multiply(nonce))
+          .toAffine();
       } else if (nonceResult.typeOfUser === "v2") {
-        finalPubKey = localEc
-          .keyFromPublic({ x: X, y: Y })
-          .getPublic()
-          .add(localEc.keyFromPublic({ x: nonceResult.pubNonce.x, y: nonceResult.pubNonce.y }).getPublic());
+        finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+          .add(localEc.Point.fromAffine({ x: toBigIntBE(nonceResult.pubNonce.x), y: toBigIntBE(nonceResult.pubNonce.y) }))
+          .toAffine();
         pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
       } else {
         throw new Error("getOrSetNonce should always return typeOfUser.");
@@ -418,25 +418,24 @@ class Torus {
     } else {
       typeOfUser = "v1";
       nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-      finalPubKey = localEc
-        .keyFromPublic({ x: X, y: Y })
-        .getPublic()
-        .add(localEc.keyFromPrivate(nonce.toString(16, 64), "hex").getPublic());
+      finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+        .add(localEc.Point.BASE.multiply(nonce))
+        .toAffine();
     }
 
     if (!oAuthPubKey) {
       throw new Error("Unable to derive oAuthPubKey");
     }
-    const oAuthX = oAuthPubKey.getX().toString(16, 64);
-    const oAuthY = oAuthPubKey.getY().toString(16, 64);
-    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.getX(), oAuthPubKey.getY());
+    const oAuthX = bigintToHex(oAuthPubKey.x);
+    const oAuthY = bigintToHex(oAuthPubKey.y);
+    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.x, oAuthPubKey.y);
 
     if (typeOfUser === "v2" && !finalPubKey) {
       throw new Error("Unable to derive finalPubKey");
     }
-    const finalX = finalPubKey ? finalPubKey.getX().toString(16, 64) : "";
-    const finalY = finalPubKey ? finalPubKey.getY().toString(16, 64) : "";
-    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.getX(), finalPubKey.getY()) : "";
+    const finalX = finalPubKey ? bigintToHex(finalPubKey.x) : "";
+    const finalY = finalPubKey ? bigintToHex(finalPubKey.y) : "";
+    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.x, finalPubKey.y) : "";
     return {
       oAuthKeyData: {
         walletAddress: oAuthAddress,
