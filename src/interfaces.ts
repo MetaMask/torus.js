@@ -48,7 +48,6 @@ export interface TorusCtorOptions {
   keyType?: KeyType;
   enableOneKey?: boolean;
   serverTimeOffset?: number;
-  allowHost?: string;
   legacyMetadataHost?: string;
   source?: string;
   authorizationServerUrl?: string;

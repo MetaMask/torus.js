@@ -45,8 +45,6 @@ import log from "./loglevel";
 class Torus {
   private static sessionTime: number = 86400; // 86400 = 24 hour
 
-  public allowHost: string;
-
   public serverTimeOffset: number;
 
   public network: TORUS_NETWORK_TYPE;
@@ -61,16 +59,15 @@ class Torus {
 
   private keyType: KeyType = KEY_TYPE.SECP256K1;
 
-  public source?: string;
+  private source?: string;
 
-  public authorizationServerUrl?: string;
+  private authorizationServerUrl: string;
 
   constructor({
     enableOneKey = false,
     clientId,
     network,
     serverTimeOffset = 0,
-    allowHost,
     legacyMetadataHost,
     keyType = KEY_TYPE.SECP256K1,
     source,
@@ -86,11 +83,10 @@ class Torus {
     this.serverTimeOffset = serverTimeOffset || 0; // ms
     this.network = network;
     this.clientId = clientId;
-    this.allowHost = allowHost || `${SIGNER_MAP[network]}/api/allow`;
     this.enableOneKey = enableOneKey;
     this.legacyMetadataHost = legacyMetadataHost || METADATA_MAP[network as TORUS_LEGACY_NETWORK_TYPE];
     this.source = source;
-    this.authorizationServerUrl = authorizationServerUrl;
+    this.authorizationServerUrl = authorizationServerUrl || `${SIGNER_MAP[network]}/api/allow`;
   }
 
   static enableLogging(v = true): void {
@@ -163,7 +159,6 @@ class Torus {
       enableOneKey: this.enableOneKey,
       ecCurve: this.ec,
       keyType: this.keyType,
-      allowHost: this.allowHost,
       network: this.network,
       clientId: this.clientId,
       endpoints,
@@ -177,6 +172,8 @@ class Torus {
       nodePubkeys,
       extraParams,
       checkCommitment,
+      source: this.source,
+      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
@@ -247,7 +244,6 @@ class Torus {
       enableOneKey: this.enableOneKey,
       ecCurve: this.ec,
       keyType: this.keyType,
-      allowHost: this.allowHost,
       network: this.network,
       clientId: this.clientId,
       endpoints,
@@ -261,6 +257,8 @@ class Torus {
       nodePubkeys,
       extraParams,
       checkCommitment,
+      source: this.source,
+      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 

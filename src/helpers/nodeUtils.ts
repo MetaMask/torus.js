@@ -1,6 +1,6 @@
 import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
-import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
+import { generateJsonRPCObject, post } from "@toruslabs/http-helpers";
 
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
@@ -362,7 +362,6 @@ export async function retrieveOrImportShare(params: {
   enableOneKey: boolean;
   ecCurve: Curve;
   keyType: KeyType;
-  allowHost: string;
   network: TORUS_NETWORK_TYPE;
   clientId: string;
   endpoints: string[];
@@ -376,13 +375,14 @@ export async function retrieveOrImportShare(params: {
   extraParams: TorusUtilsExtraParams;
   newImportedShares?: ImportedShare[];
   checkCommitment?: boolean;
+  source?: string;
+  authorizationServerUrl?: string;
 }): Promise<TorusKey> {
   const {
     legacyMetadataHost,
     enableOneKey,
     ecCurve,
     keyType,
-    allowHost,
     network,
     clientId,
     endpoints,
@@ -397,18 +397,20 @@ export async function retrieveOrImportShare(params: {
     useDkg = true,
     serverTimeOffset,
     checkCommitment = true,
+    source,
+    authorizationServerUrl,
   } = params;
-  await get<void>(
-    allowHost,
+  await post<void>(
+    authorizationServerUrl,
     {
-      headers: {
-        verifier,
-        verifierid: verifierParams.verifier_id,
-        network,
-        clientid: clientId,
-        enablegating: "true",
-      },
+      verifier,
+      verifier_id: verifierParams.verifier_id,
+      network,
+      client_id: clientId,
+      enable_gating: "true",
+      ...(source ? { source } : {}),
     },
+    {},
     { useAPIKey: true }
   );
 
