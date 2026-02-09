@@ -1,11 +1,9 @@
 import { faker } from "@faker-js/faker";
 import { TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
-import BN from "bn.js";
-import { ec as EC } from "elliptic";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { generatePrivateKey, keccak256 } from "../src";
+import { bytesToHex, generatePrivateKey, keccak256, utf8ToBytes } from "../src";
 import TorusUtils from "../src/torus";
 import { generateIdToken, getImportKeyParams, getRetrieveSharesParams } from "./helpers";
 
@@ -53,7 +51,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "56e803db7710adbfe0ecca35bc6a3ad27e966df142e157e76e492773c88e8433",
           Y: "f4168594c1126ca731756dd480f992ee73b0834ba4b787dd892a9211165f50a3",
         },
-        nonce: new BN("0", "hex"),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -64,10 +62,9 @@ describe("torus utils sapphire mainnet", () => {
   it("should be able to import a key for a new user", async () => {
     const email = faker.internet.email();
     const token = generateIdToken(email, "ES256");
-    const ec = new EC("secp256k1");
 
-    const privKeyBuffer = generatePrivateKey(ec, Buffer);
-    const privHex = privKeyBuffer.toString("hex");
+    const privKeyBuffer = generatePrivateKey("secp256k1");
+    const privHex = bytesToHex(privKeyBuffer);
     const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails({ verifier: TORUS_TEST_VERIFIER, verifierId: email });
     const torusNodeEndpoints = nodeDetails.torusNodeSSSEndpoints;
     const result = await torus.importPrivateKey(
@@ -110,7 +107,7 @@ describe("torus utils sapphire mainnet", () => {
     expect(result.finalKeyData.walletAddress).not.toBe(null);
     expect(result.oAuthKeyData.walletAddress).not.toBe(null);
     expect(result.metadata.typeOfUser).toBe("v2");
-    expect(result.metadata.nonce).toStrictEqual(new BN("0"));
+    expect(result.metadata.nonce).toStrictEqual(0n);
     expect(result.metadata.upgraded).toBe(false);
   });
 
@@ -140,7 +137,7 @@ describe("torus utils sapphire mainnet", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -169,7 +166,7 @@ describe("torus utils sapphire mainnet", () => {
     expect(result.finalKeyData.privKey).not.toBe(null);
     expect(result.oAuthKeyData.walletAddress).not.toBe(null);
     expect(result.metadata.typeOfUser).toBe("v2");
-    expect(result.metadata.nonce).toStrictEqual(new BN("0"));
+    expect(result.metadata.nonce).toStrictEqual(0n);
     expect(result.metadata.upgraded).toBe(true);
   });
 
@@ -198,7 +195,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "498ed301af25a3b7136f478fa58677c79a6d6fe965bc13002a6f459b896313bd",
           Y: "d6feb9a1e0d6d0627fbb1ce75682bc09ab4cf0e2da4f0f7fcac0ba9d07596c8f",
         },
-        nonce: new BN("0", "hex"),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -230,7 +227,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "498ed301af25a3b7136f478fa58677c79a6d6fe965bc13002a6f459b896313bd",
           Y: "d6feb9a1e0d6d0627fbb1ce75682bc09ab4cf0e2da4f0f7fcac0ba9d07596c8f",
         },
-        nonce: new BN("0", "hex"),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -285,7 +282,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "498ed301af25a3b7136f478fa58677c79a6d6fe965bc13002a6f459b896313bd",
           Y: "d6feb9a1e0d6d0627fbb1ce75682bc09ab4cf0e2da4f0f7fcac0ba9d07596c8f",
         },
-        nonce: new BN("3c2b6ba5b54ca0ba4ae978eb48429a84c47b7b3e526b35e7d46dd716887f52bf", "hex"),
+        nonce: BigInt("0x3c2b6ba5b54ca0ba4ae978eb48429a84c47b7b3e526b35e7d46dd716887f52bf"),
         typeOfUser: "v2",
         upgraded: false,
       },
@@ -329,7 +326,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "ab4d287c263ab1bb83c37646d0279764e50fe4b0c34de4da113657866ddcf318",
           Y: "ad35db2679dfad4b62d77cf753d7b98f73c902e5d101cc2c3c1209ece6d94382",
         },
-        nonce: new BN("4f1181d8689f0d0960f1a6f9fe26e03e557bdfba11f4b6c8d7b1285e9c271b13", "hex"),
+        nonce: BigInt("0x4f1181d8689f0d0960f1a6f9fe26e03e557bdfba11f4b6c8d7b1285e9c271b13"),
         typeOfUser: "v2",
         upgraded: false,
       },
@@ -383,7 +380,7 @@ describe("torus utils sapphire mainnet", () => {
           X: "ab4d287c263ab1bb83c37646d0279764e50fe4b0c34de4da113657866ddcf318",
           Y: "ad35db2679dfad4b62d77cf753d7b98f73c902e5d101cc2c3c1209ece6d94382",
         },
-        nonce: new BN("4f1181d8689f0d0960f1a6f9fe26e03e557bdfba11f4b6c8d7b1285e9c271b13", "hex"),
+        nonce: BigInt("0x4f1181d8689f0d0960f1a6f9fe26e03e557bdfba11f4b6c8d7b1285e9c271b13"),
         typeOfUser: "v2",
         upgraded: false,
       },
@@ -394,7 +391,7 @@ describe("torus utils sapphire mainnet", () => {
   it("should be able to aggregate login", async () => {
     const email = faker.internet.email();
     const idToken = generateIdToken(email, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: email };
 
     const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
@@ -424,7 +421,7 @@ describe("torus utils sapphire mainnet", () => {
   it("should be able to aggregate login without commitment", async () => {
     const email = faker.internet.email();
     const idToken = generateIdToken(email, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: email };
 
     const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);

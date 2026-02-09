@@ -93,8 +93,8 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
     timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
   const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
-  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)));
-  const pubKey = secp256k1.Point.BASE.multiply(privateKey).toAffine();
+  const sig = ecCurve.sign(msgHash, hexToBytes(bigintToHex(privateKey)));
+  const pubKey = ecCurve.Point.BASE.multiply(privateKey).toAffine();
   return {
     pub_key_X: pubKey.x.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     pub_key_Y: pubKey.y.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T

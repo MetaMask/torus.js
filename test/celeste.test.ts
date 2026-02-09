@@ -1,10 +1,9 @@
 import { faker } from "@faker-js/faker";
 import { TORUS_LEGACY_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
-import BN from "bn.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { keccak256 } from "../src";
+import { keccak256, utf8ToBytes } from "../src";
 import TorusUtils from "../src/torus";
 import { generateIdToken, getRetrieveSharesParams } from "./helpers";
 
@@ -46,7 +45,7 @@ describe("torus utils celeste", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v1",
       },
@@ -77,7 +76,7 @@ describe("torus utils celeste", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v1",
       },
@@ -110,7 +109,7 @@ describe("torus utils celeste", () => {
           X: "2f630074151394ba1f715986a9215f4e36c9f22fc264ff880ef6d162c1300aa8",
           Y: "704cb63e5f7a291735c54e22242ef53673642ec1660da00f1abc2e7909da03d7",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -142,7 +141,7 @@ describe("torus utils celeste", () => {
           X: "f8ff2c44cc0abf512d35b35c3c5cbc0eda700d49bc13b72c5492b0cdb2ca3619",
           Y: "88fb3087cec269c8c39d25b04f15298d33712f13b0f9665821328dfc7a567afb",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -195,14 +194,14 @@ describe("torus utils celeste", () => {
         privKey: "0ae056aa938080c9e8bf6641261619e09fd510c91bb5aad14b0de9742085a914",
       },
       sessionData: result.sessionData,
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });
 
   it("should be able to aggregate login", async () => {
     const idToken = generateIdToken(TORUS_TEST_EMAIL, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: TORUS_TEST_EMAIL };
     const { torusNodeEndpoints, torusIndexes, torusNodePub } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const result = await torus.retrieveShares(
@@ -243,7 +242,7 @@ describe("torus utils celeste", () => {
         privKey: "356305761eca57f27b09700d76456ad627b084152725dbfdfcfa0abcd9d4f17e",
       },
       sessionData: result.sessionData,
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });

@@ -1,10 +1,9 @@
 import { faker } from "@faker-js/faker";
 import { TORUS_LEGACY_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
-import BN from "bn.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { keccak256 } from "../src";
+import { keccak256, utf8ToBytes } from "../src";
 import TorusUtils from "../src/torus";
 import { generateIdToken, getRetrieveSharesParams } from "./helpers";
 
@@ -46,7 +45,7 @@ describe("torus utils cyan", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v1",
       },
@@ -80,7 +79,7 @@ describe("torus utils cyan", () => {
           X: "5f2505155e2c1119ee8a76d0f3b22fccee45871d4aab3cb6209bdbc302b5abc2",
           Y: "a20f30868759a6095697d5631483faa650f489b33c0e2958ad8dc29e707c0a99",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -114,7 +113,7 @@ describe("torus utils cyan", () => {
           X: "da0039dd481e140090bed9e777ce16c0c4a16f30f47e8b08b73ac77737dd2d4",
           Y: "7fecffd2910fa47dbdbc989f5c119a668fc922937175974953cbb51c49268265",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -146,7 +145,7 @@ describe("torus utils cyan", () => {
           X: "50e250cc6ac1d50d32d2b0f85f11c6625a917a115ced4ef24f4eac183e1525c7",
           Y: "8067a52d02b8214bf82e91b66ce5009f674f4c3998b103059c46c386d0c17f90",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -199,7 +198,7 @@ describe("torus utils cyan", () => {
         Y: "beef0efad88e81385952c0068ca48e8b9c2121be87cb0ddf18a68806db202359",
         privKey: "5db51619684b32a2ff2375b4c03459d936179dfba401cb1c176b621e8a2e4ac8",
       },
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });
@@ -244,14 +243,14 @@ describe("torus utils cyan", () => {
         Y: "beef0efad88e81385952c0068ca48e8b9c2121be87cb0ddf18a68806db202359",
         privKey: "5db51619684b32a2ff2375b4c03459d936179dfba401cb1c176b621e8a2e4ac8",
       },
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });
 
   it("should be able to aggregate login", async () => {
     const idToken = generateIdToken(TORUS_TEST_EMAIL, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: TORUS_TEST_EMAIL };
     const { torusNodeEndpoints, torusIndexes, torusNodePub } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const result = await torus.retrieveShares(
@@ -292,7 +291,7 @@ describe("torus utils cyan", () => {
         Y: "e557a5ee879632727f5979d6b9cea69d87e3dab54a8c1b6685d86dfbfcd785dd",
         privKey: "45a5b62c4ff5490baa75d33bf4f03ba6c5b0095678b0f4055312eef7b780b7bf",
       },
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });

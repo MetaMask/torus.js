@@ -1,10 +1,9 @@
 import { faker } from "@faker-js/faker";
 import { TORUS_LEGACY_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
-import BN from "bn.js";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { keccak256, TorusPublicKey } from "../src";
+import { keccak256, TorusPublicKey, utf8ToBytes } from "../src";
 import TorusUtils from "../src/torus";
 import { generateIdToken, getRetrieveSharesParams } from "./helpers";
 
@@ -49,7 +48,7 @@ describe("torus onekey", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN("186a20d9b00315855ff5622a083aca6b2d34ef66ef6e0a4de670f5b2fde37e0d", "hex"),
+        nonce: BigInt("0x186a20d9b00315855ff5622a083aca6b2d34ef66ef6e0a4de670f5b2fde37e0d"),
         upgraded: false,
         typeOfUser: "v1",
       },
@@ -95,7 +94,7 @@ describe("torus onekey", () => {
           X: "8e8c399d8ba00ff88e6c42eb40c10661f822868ba2ad8fe12a8830e996b1e25d",
           Y: "554b12253694bf9eb98485441bba7ba220b78cb78ee21664e96f934d10b1494d",
         },
-        nonce: new BN("22d160abe5320fe2be52a57c7aca8fe5d7e5eff104ff4d2b32767e3344e040bf", "hex"),
+        nonce: BigInt("0x22d160abe5320fe2be52a57c7aca8fe5d7e5eff104ff4d2b32767e3344e040bf"),
         typeOfUser: "v2",
         upgraded: false,
       },
@@ -105,7 +104,7 @@ describe("torus onekey", () => {
 
   it("should still aggregate account v1 user correctly", async () => {
     const idToken = generateIdToken(TORUS_TEST_EMAIL, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: TORUS_TEST_EMAIL };
     const { torusNodeEndpoints, torusIndexes, torusNodePub } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const retrieveSharesResponse = await torus.retrieveShares(
@@ -153,7 +152,7 @@ describe("torus onekey", () => {
           X: "376c0ac5e15686633061cf5833dd040365f91377686d7ab5338c5202bd963a2f",
           Y: "794d7edb6a5ec0307dd40789274b377f37f293b0410a6cbd303db309536099b7",
         },
-        nonce: new BN("d3d455dcab49dc700319244e9e187f443596f2acbce238cff1c215d8809fa1f9", "hex"),
+        nonce: BigInt("0xd3d455dcab49dc700319244e9e187f443596f2acbce238cff1c215d8809fa1f9"),
         typeOfUser: "v2",
         upgraded: false,
       },
@@ -183,7 +182,7 @@ describe("torus onekey", () => {
     const result = await torus.retrieveShares(
       getRetrieveSharesParams(torusNodeEndpoints, torusIndexes, TORUS_TEST_VERIFIER, { verifier_id: email }, token, torusNodePub)
     );
-    expect(!result.metadata.nonce.eq(new BN("0"))).toBe(true);
+    expect(result.metadata.nonce !== 0n).toBe(true);
     expect(result.metadata.typeOfUser).toBe("v2");
     expect(result.metadata.upgraded).toBe(false);
     expect(result.finalKeyData.walletAddress).not.toBe("");
@@ -238,7 +237,7 @@ describe("torus onekey", () => {
           X: "f494a5bf06a2f0550aafb6aabeb495bd6ea3ef92eaa736819b5b0ad6bfbf1aab",
           Y: "35df3d3a14f88cbba0cfd092a1e5a0e4e725ba52a8d45719614555542d701f18",
         },
-        nonce: new BN("aa0dcf552fb5be7a5c52b783c1b61c1aca7113872e172a5818994715c8a5497c", "hex"),
+        nonce: BigInt("0xaa0dcf552fb5be7a5c52b783c1b61c1aca7113872e172a5818994715c8a5497c"),
         typeOfUser: "v2",
         upgraded: false,
       },
