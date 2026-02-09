@@ -50,6 +50,8 @@ export interface TorusCtorOptions {
   serverTimeOffset?: number;
   allowHost?: string;
   legacyMetadataHost?: string;
+  source?: string;
+  authorizationServerUrl?: string;
 }
 
 export interface LegacyVerifierLookupResponse {
