@@ -1,6 +1,4 @@
-import { EdDSA } from "@noble/curves/abstract/edwards.js";
 import { invert, mod } from "@noble/curves/abstract/modular.js";
-import { ECDSA } from "@noble/curves/abstract/weierstrass.js";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bytesToHex, bytesToNumberBE, concatBytes, hexToBytes, hexToNumber, numberToBytesBE, numberToHexUnpadded } from "@noble/curves/utils.js";
@@ -10,6 +8,8 @@ import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import JsonStringify from "json-stable-stringify";
 
 import { CommitmentRequestResult, EciesHex, GetORSetKeyResponse, KeyType, VerifierLookupResponse } from "../interfaces";
+
+export type Curve = typeof secp256k1 | typeof ed25519;
 
 // Re-export noble utilities for use across the codebase
 export { bytesToHex, bytesToNumberBE, concatBytes, hexToBytes, invert, mod, numberToBytesBE };
@@ -62,7 +62,7 @@ export const generatePrivateKey = (keyType: KeyType): Uint8Array => {
 export const getSecp256k1 = () => secp256k1;
 export const getEd25519 = () => ed25519;
 
-export const getKeyCurve = (keyType: KeyType): ECDSA | EdDSA => {
+export const getKeyCurve = (keyType: KeyType): Curve => {
   if (keyType === KEY_TYPE.SECP256K1) {
     return secp256k1;
   } else if (keyType === KEY_TYPE.ED25519) {
