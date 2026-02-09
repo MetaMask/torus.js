@@ -1,31 +1,59 @@
+import { EdDSA } from "@noble/curves/abstract/edwards.js";
+import { invert, mod } from "@noble/curves/abstract/modular.js";
+import { ECDSA } from "@noble/curves/abstract/weierstrass.js";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { bytesToHex, bytesToNumberBE, concatBytes, hexToBytes, numberToBytesBE } from "@noble/curves/utils.js";
 import { JRPCResponse, KEY_TYPE } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
-import { BN } from "bn.js";
-import { ec as EC } from "elliptic";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import JsonStringify from "json-stable-stringify";
 
 import { CommitmentRequestResult, EciesHex, GetORSetKeyResponse, KeyType, VerifierLookupResponse } from "../interfaces";
 
-export function keccak256(a: Buffer): string {
-  const hash = Buffer.from(keccakHash(a)).toString("hex");
+// Re-export noble utilities for use across the codebase
+export { bytesToHex, bytesToNumberBE, concatBytes, hexToBytes, invert, mod, numberToBytesBE };
+
+// Custom encoding helpers (not provided by @noble/curves)
+export function utf8ToBytes(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
+}
+
+export function bytesToBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+export function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export function keccak256(a: Uint8Array): string {
+  const hash = bytesToHex(keccakHash(a));
   return `0x${hash}`;
 }
 
-export const generatePrivateKey = (ecCurve: EC, buf: typeof Buffer): Buffer => {
-  return ecCurve.genKeyPair().getPrivate().toArrayLike(buf);
+export const generatePrivateKey = (keyType: KeyType): Uint8Array => {
+  if (keyType === KEY_TYPE.SECP256K1) {
+    return secp256k1.utils.randomSecretKey();
+  } else if (keyType === KEY_TYPE.ED25519) {
+    return ed25519.utils.randomSecretKey();
+  }
+  throw new Error(`Invalid keyType: ${keyType}`);
 };
 
-let secp256k1EC: EC;
-let ed25519EC: EC;
+export const getSecp256k1 = () => secp256k1;
+export const getEd25519 = () => ed25519;
 
-export const getKeyCurve = (keyType: KeyType) => {
+export const getKeyCurve = (keyType: KeyType): ECDSA | EdDSA => {
   if (keyType === KEY_TYPE.SECP256K1) {
-    if (!secp256k1EC) secp256k1EC = new EC("secp256k1");
-    return secp256k1EC;
+    return secp256k1;
   } else if (keyType === KEY_TYPE.ED25519) {
-    if (!ed25519EC) ed25519EC = new EC("ed25519");
-    return ed25519EC;
+    return ed25519;
   }
   throw new Error(`Invalid keyType: ${keyType}`);
 };
@@ -112,26 +140,26 @@ export const thresholdSame = <T>(arr: T[], t: number): T | undefined => {
 
 export function encParamsBufToHex(encParams: Ecies): EciesHex {
   return {
-    iv: Buffer.from(encParams.iv).toString("hex"),
-    ephemPublicKey: Buffer.from(encParams.ephemPublicKey).toString("hex"),
-    ciphertext: Buffer.from(encParams.ciphertext).toString("hex"),
-    mac: Buffer.from(encParams.mac).toString("hex"),
+    iv: bytesToHex(encParams.iv),
+    ephemPublicKey: bytesToHex(encParams.ephemPublicKey),
+    ciphertext: bytesToHex(encParams.ciphertext),
+    mac: bytesToHex(encParams.mac),
     mode: "AES256",
   };
 }
 
 export function encParamsHexToBuf(eciesData: Omit<EciesHex, "ciphertext">): Omit<Ecies, "ciphertext"> {
   return {
-    ephemPublicKey: Buffer.from(eciesData.ephemPublicKey, "hex"),
-    iv: Buffer.from(eciesData.iv, "hex"),
-    mac: Buffer.from(eciesData.mac, "hex"),
+    ephemPublicKey: hexToBytes(eciesData.ephemPublicKey),
+    iv: hexToBytes(eciesData.iv),
+    mac: hexToBytes(eciesData.mac),
   };
 }
 
 export function getProxyCoordinatorEndpointIndex(endpoints: string[], verifier: string, verifierId: string) {
   const verifierIdStr = `${verifier}${verifierId}`;
-  const hashedVerifierId = keccak256(Buffer.from(verifierIdStr, "utf8")).slice(2);
-  const proxyEndpointNum = new BN(hashedVerifierId, "hex").mod(new BN(endpoints.length)).toNumber();
+  const hashedVerifierId = keccak256(utf8ToBytes(verifierIdStr)).slice(2);
+  const proxyEndpointNum = Number(BigInt(`0x${hashedVerifierId}`) % BigInt(endpoints.length));
   return proxyEndpointNum;
 }
 
