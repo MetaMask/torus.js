@@ -96,7 +96,7 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
   };
   const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
   // metadata only uses secp for sig validation; prehash: false because msgHash is already hashed
-  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
+  const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
   const pubKey = derivePubKey(ecCurve, privateKey);
   return {
     pub_key_X: pubKey.x.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
@@ -148,7 +148,7 @@ export function generateNonceMetadataParams(
   }
 
   const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
-  const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
+  const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
   const pubKey = derivePubKey(secp256k1, privateKey);
   return {
     pub_key_X: bigintToHex(pubKey.x),
@@ -259,7 +259,7 @@ export async function getOrSetSapphireMetadataNonce(
       timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
     };
     const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
-    const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privKey)), { prehash: false });
+    const sig = secp256k1.sign(msgHash, numberToBytesBE(privKey, 32), { prehash: false });
     const pubKey = derivePubKey(secp256k1, privKey);
     data = {
       ...data,

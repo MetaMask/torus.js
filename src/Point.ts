@@ -1,8 +1,8 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { concatBytes, hexToBytes } from "@noble/curves/utils.js";
+import { concatBytes, hexToBytes, numberToBytesBE } from "@noble/curves/utils.js";
 
-import { bigintToHex, toBigIntBE } from "./helpers/common";
+import { toBigIntBE } from "./helpers/common";
 import { BigIntString, KeyType } from "./interfaces";
 
 class Point {
@@ -21,7 +21,7 @@ class Point {
   encode(enc: string): Uint8Array {
     switch (enc) {
       case "arr":
-        return concatBytes(hexToBytes("04"), hexToBytes(bigintToHex(this.x)), hexToBytes(bigintToHex(this.y)));
+        return concatBytes(hexToBytes("04"), numberToBytesBE(this.x, 32), numberToBytesBE(this.y, 32));
       case "elliptic-compressed": {
         if (this.keyType === "secp256k1") {
           const point = secp256k1.Point.fromAffine({ x: this.x, y: this.y });
