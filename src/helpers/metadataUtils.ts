@@ -23,7 +23,7 @@ import {
   base64ToBytes,
   bigintToHex,
   bytesToBase64,
-  bytesToHex,
+  bytesToNumberBE,
   concatBytes,
   Curve,
   derivePubKey,
@@ -44,9 +44,8 @@ export const getSecpKeyFromEd25519 = (
 } => {
   const N = secp256k1.Point.CURVE().n;
 
-  const ed25519Key = bigintToHex(ed25519Scalar);
-  const keyHash = keccakHash(hexToBytes(ed25519Key));
-  const secpScalar = mod(toBigIntBE(bytesToHex(keyHash)), N);
+  const keyHash = keccakHash(numberToBytesBE(ed25519Scalar, 32));
+  const secpScalar = mod(bytesToNumberBE(keyHash), N);
   const point = derivePubKey(secp256k1, secpScalar);
 
   return {
