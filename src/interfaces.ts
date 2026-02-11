@@ -227,6 +227,9 @@ export type BigIntString = string | bigint;
 
 export type StringifiedType = Record<string, unknown>;
 
+/** JSON shape returned by Share.toJSON() */
+export type ShareJSON = { share: string; shareIndex: string };
+
 export interface MetadataResponse {
   message: string;
 }

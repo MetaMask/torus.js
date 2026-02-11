@@ -16,6 +16,7 @@ import {
   GetOrSetNonceError,
   GetPubKeyOrKeyAssign,
   hexToBytes,
+  isV2NonceResult,
   retrieveOrImportShare,
   toBigIntBE,
 } from "./helpers";
@@ -29,7 +30,6 @@ import {
   TorusCtorOptions,
   TorusKey,
   TorusPublicKey,
-  v2NonceResultType,
 } from "./interfaces";
 import log from "./loglevel";
 
@@ -324,14 +324,13 @@ class Torus {
         },
         serverTimeOffset: finalServerTimeOffset,
       });
-    } else {
-      const v2NonceResult = nonceResult as v2NonceResultType;
+    } else if (isV2NonceResult(nonceResult)) {
       oAuthPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
       finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
-        .add(localEc.Point.fromAffine({ x: toBigIntBE(v2NonceResult.pubNonce.x), y: toBigIntBE(v2NonceResult.pubNonce.y) }))
+        .add(localEc.Point.fromAffine({ x: toBigIntBE(nonceResult.pubNonce.x), y: toBigIntBE(nonceResult.pubNonce.y) }))
         .toAffine();
 
-      pubNonce = { X: v2NonceResult.pubNonce.x, Y: v2NonceResult.pubNonce.y };
+      pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
     }
 
     if (!oAuthPubKey) {
@@ -361,7 +360,7 @@ class Torus {
       metadata: {
         pubNonce,
         nonce,
-        upgraded: (nonceResult as v2NonceResultType)?.upgraded || false,
+        upgraded: isV2NonceResult(nonceResult) ? nonceResult.upgraded : false,
         typeOfUser: "v2",
         serverTimeOffset: finalServerTimeOffset,
       },
@@ -446,7 +445,7 @@ class Torus {
       metadata: {
         pubNonce,
         nonce,
-        upgraded: (nonceResult as v2NonceResultType)?.upgraded || false,
+        upgraded: isV2NonceResult(nonceResult) ? nonceResult.upgraded : false,
         typeOfUser,
         serverTimeOffset: finalServerTimeOffset,
       },

@@ -7,7 +7,7 @@ import { sha512 } from "ethereum-cryptography/sha512";
 import stringify from "json-stable-stringify";
 import log from "loglevel";
 
-import { EncryptedSeed, ImportedShare, KeyType, Point2D, PrivateKeyData } from "../interfaces";
+import { EncryptedSeed, GetOrSetNonceResult, ImportedShare, KeyType, Point2D, PrivateKeyData, ShareJSON, v2NonceResultType } from "../interfaces";
 import {
   bigintToHex,
   bytesToBase64,
@@ -27,6 +27,10 @@ import {
 } from "./common";
 import { generateRandomPolynomial } from "./langrangeInterpolatePoly";
 import { generateNonceMetadataParams, getSecpKeyFromEd25519 } from "./metadataUtils";
+
+export function isV2NonceResult(r: GetOrSetNonceResult): r is v2NonceResultType {
+  return r.typeOfUser === "v2";
+}
 
 export function stripHexPrefix(str: string): string {
   return str.startsWith("0x") ? str.slice(2) : str;
@@ -199,7 +203,7 @@ export const generateShares = async (
   const sharesData: ImportedShare[] = [];
   const encPromises: Promise<Ecies>[] = [];
   for (let i = 0; i < nodeIndexesBigInt.length; i++) {
-    const shareJson = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON() as Record<string, string>;
+    const shareJson: ShareJSON = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON();
     if (!nodePubkeys[i]) {
       throw new Error(`Missing node pub key for node index: ${bigintToHex(nodeIndexesBigInt[i])}`);
     }
@@ -211,7 +215,7 @@ export const generateShares = async (
   }
   const encShares = await Promise.all(encPromises);
   for (let i = 0; i < nodeIndexesBigInt.length; i += 1) {
-    const shareJson = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON() as Record<string, string>;
+    const shareJson: ShareJSON = shares[bigintToHex(nodeIndexesBigInt[i])].toJSON();
     const encParams = encShares[i];
     const encParamsMetadata = encParamsBufToHex(encParams);
     const shareData: ImportedShare = {

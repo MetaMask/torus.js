@@ -245,7 +245,7 @@ export function retryCommitment(executionPromise: () => Promise<JRPCResponse<Com
       const a = await executionPromise();
       return a;
     } catch (e: unknown) {
-      const errorMsg = (e as Error).message;
+      const errorMsg = e instanceof Error ? e.message : String(e);
       const acceptedErrorMsgs = [
         // Slow node
         "Timed out",

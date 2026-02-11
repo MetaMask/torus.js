@@ -94,7 +94,7 @@ export const Some = <K, T>(promises: Promise<K>[], predicate: (resultArr: K[], {
                       new SomeError({
                         errors: errorArr,
                         responses: resultArr,
-                        predicate: (predicateError as Error)?.message || (predicateError as string),
+                        predicate: predicateError instanceof Error ? predicateError.message : String(predicateError),
                       })
                     );
                   }

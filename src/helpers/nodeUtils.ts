@@ -19,7 +19,6 @@ import {
   ShareRequestResult,
   TorusKey,
   UserType,
-  v2NonceResultType,
   VerifierLookupResponse,
   VerifierLookupResult,
   VerifierParams,
@@ -49,7 +48,7 @@ import {
   toBigIntBE,
   utf8ToBytes,
 } from "./common";
-import { generateAddressFromPrivKey, generateAddressFromPubKey, generateShares } from "./keyUtils";
+import { generateAddressFromPrivKey, generateAddressFromPubKey, generateShares, isV2NonceResult } from "./keyUtils";
 import { lagrangeInterpolation } from "./langrangeInterpolatePoly";
 import {
   decryptNodeData,
@@ -116,7 +115,8 @@ export const GetPubKeyOrKeyAssign = async (params: {
         if (x1 && !x1.error) {
           const currentNodePubKey = x1.result.keys[0].pub_key_X.toLowerCase();
           const thresholdPubKey = keyResult.keys[0].pub_key_X.toLowerCase();
-          const pubNonceX = (x1.result?.keys[0].nonce_data as v2NonceResultType)?.pubNonce?.x;
+          const nonceData = x1.result?.keys[0].nonce_data;
+          const pubNonceX = nonceData && isV2NonceResult(nonceData) ? nonceData.pubNonce?.x : undefined;
           if (pubNonceX && currentNodePubKey === thresholdPubKey) {
             nonceResult = x1.result.keys[0].nonce_data;
             break;
@@ -614,7 +614,8 @@ export async function retrieveOrImportShare(params: {
       const requiredShareResponse = x && x.result && x.result.keys[0].public_key && x.result.keys[0];
       if (requiredShareResponse && !thresholdNonceData && !verifierParams.extended_verifier_id) {
         const currentPubKey = requiredShareResponse.public_key;
-        const pubNonce = (requiredShareResponse.nonce_data as v2NonceResultType)?.pubNonce?.x;
+        const nonceData = requiredShareResponse.nonce_data;
+        const pubNonce = nonceData && isV2NonceResult(nonceData) ? nonceData.pubNonce?.x : undefined;
         if (pubNonce && currentPubKey.X === thresholdPublicKey.X) {
           thresholdNonceData = requiredShareResponse.nonce_data;
         }
@@ -839,11 +840,11 @@ export async function retrieveOrImportShare(params: {
         nonceResult = await getOrSetNonce(legacyMetadataHost, ecCurve, serverTimeOffsetResponse, oAuthPubkeyX, oAuthPubkeyY, oAuthKey, !isNewKey);
         metadataNonce = nonceResult.nonce ? toBigIntBE(nonceResult.nonce) : 0n;
         typeOfUser = nonceResult.typeOfUser;
-        if (typeOfUser === "v2") {
-          pubNonce = { X: (nonceResult as v2NonceResultType).pubNonce.x, Y: (nonceResult as v2NonceResultType).pubNonce.y };
+        if (typeOfUser === "v2" && isV2NonceResult(nonceResult)) {
+          pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
           const noncePubKey = {
-            x: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.x),
-            y: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.y),
+            x: toBigIntBE(nonceResult.pubNonce.x),
+            y: toBigIntBE(nonceResult.pubNonce.y),
           };
           finalPubKey = ecCurve.Point.fromAffine(oAuthPubKey).add(ecCurve.Point.fromAffine(noncePubKey)).toAffine();
         } else {
@@ -860,14 +861,14 @@ export async function retrieveOrImportShare(params: {
         const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
         finalPubKey = derivePubKey(ecCurve, privateKeyWithNonce);
       }
-    } else {
+    } else if (isV2NonceResult(nonceResult)) {
       typeOfUser = "v2";
       const noncePubKey = {
-        x: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.x),
-        y: toBigIntBE((nonceResult as v2NonceResultType).pubNonce.y),
+        x: toBigIntBE(nonceResult.pubNonce.x),
+        y: toBigIntBE(nonceResult.pubNonce.y),
       };
       finalPubKey = ecCurve.Point.fromAffine(oAuthPubKey).add(ecCurve.Point.fromAffine(noncePubKey)).toAffine();
-      pubNonce = { X: (nonceResult as v2NonceResultType).pubNonce.x, Y: (nonceResult as v2NonceResultType).pubNonce.y };
+      pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
     }
 
     if (!finalPubKey) {
