@@ -15,6 +15,7 @@ import {
   bytesToNumberBE,
   bytesToNumberLE,
   Curve,
+  derivePubKey,
   encParamsBufToHex,
   generatePrivateKey,
   getKeyCurve,
@@ -80,7 +81,7 @@ export function getEd25519ExtendedPublicKey(keyBytes: Uint8Array): {
   }
   const head = bytesToNumberLE(adjustScalarBytes(new Uint8Array(hashed.slice(0, len))));
   const scalar = mod(head, N); // The actual private scalar
-  const point = ed25519Curve.Point.BASE.multiply(scalar).toAffine(); // Point on Edwards curve aka public key
+  const point = derivePubKey(ed25519Curve, scalar);
   return { scalar, point };
 }
 
@@ -107,7 +108,7 @@ export const generateEd25519KeyData = async (ed25519Seed: Uint8Array): Promise<P
   const encDataBase64 = bytesToBase64(utf8ToBytes(JSON.stringify(encData)));
   const metadataPrivNonce = bytesToNumberBE(generatePrivateKey(KEY_TYPE.ED25519));
   const oauthKey = mod(finalEd25519Key.scalar - metadataPrivNonce, N);
-  const oauthPub = ed25519Curve.Point.BASE.multiply(oauthKey).toAffine();
+  const oauthPub = derivePubKey(ed25519Curve, oauthKey);
   const metadataSigningKey = getSecpKeyFromEd25519(oauthKey);
   return {
     oAuthKeyScalar: oauthKey,
@@ -129,9 +130,9 @@ export const generateSecp256k1KeyData = async (scalarBytes: Uint8Array): Promise
   const scalar = bytesToNumberBE(scalarBytes);
   const randomNonce = bytesToNumberBE(generatePrivateKey(KEY_TYPE.SECP256K1));
   const oAuthKey = mod(scalar - randomNonce, N);
-  const oAuthPub = secp256k1Curve.Point.BASE.multiply(oAuthKey).toAffine();
+  const oAuthPub = derivePubKey(secp256k1Curve, oAuthKey);
 
-  const finalUserPub = secp256k1Curve.Point.BASE.multiply(scalar).toAffine();
+  const finalUserPub = derivePubKey(secp256k1Curve, scalar);
 
   return {
     oAuthKeyScalar: oAuthKey,
@@ -162,7 +163,7 @@ function generateAddressFromPoint(keyType: KeyType, point: Point2D): string {
 
 export function generateAddressFromPrivKey(keyType: KeyType, privateKey: bigint): string {
   const ecCurve = getKeyCurve(keyType);
-  const point = ecCurve.Point.BASE.multiply(privateKey).toAffine();
+  const point = derivePubKey(ecCurve, privateKey);
   return generateAddressFromPoint(keyType, point);
 }
 
@@ -174,10 +175,6 @@ export function getPostboxKeyFrom1OutOf1(ecCurve: Curve, privKey: string, nonce:
   const privKeyBI = toBigIntBE(privKey);
   const nonceBI = toBigIntBE(nonce);
   return bigintToHex(mod(privKeyBI - nonceBI, ecCurve.Point.CURVE().n));
-}
-
-export function derivePubKey(ecCurve: Curve, sk: bigint): Point2D {
-  return ecCurve.Point.BASE.multiply(sk).toAffine();
 }
 
 export const generateShares = async (
@@ -194,7 +191,7 @@ export const generateShares = async (
   const degree = threshold - 1;
   const nodeIndexesBigInt: bigint[] = nodeIndexes.map((i) => BigInt(i));
 
-  const oAuthPub = ecCurve.Point.BASE.multiply(oAuthKey).toAffine();
+  const oAuthPub = derivePubKey(ecCurve, oAuthKey);
   const poly = generateRandomPolynomial(ecCurve, keyType, degree, oAuthKey);
   const shares = poly.generateShares(nodeIndexesBigInt);
   const nonceParams = generateNonceMetadataParams(serverTimeOffset, "getOrSetNonce", metadataSigningKey, keyType, metadataNonce, encryptedSeed);

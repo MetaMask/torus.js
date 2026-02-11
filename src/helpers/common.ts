@@ -16,9 +16,13 @@ import { Ecies } from "@toruslabs/eccrypto";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import JsonStringify from "json-stable-stringify";
 
-import { CommitmentRequestResult, EciesHex, GetORSetKeyResponse, KeyType, VerifierLookupResponse } from "../interfaces";
+import { CommitmentRequestResult, EciesHex, GetORSetKeyResponse, KeyType, Point2D, VerifierLookupResponse } from "../interfaces";
 
 export type Curve = typeof secp256k1 | typeof ed25519;
+
+export function derivePubKey(ecCurve: Curve, sk: bigint): Point2D {
+  return ecCurve.Point.BASE.multiply(sk).toAffine();
+}
 
 // Re-export noble utilities for use across the codebase
 export { bytesToHex, bytesToNumberBE, bytesToNumberLE, concatBytes, hexToBytes, invert, mod, numberToBytesBE };

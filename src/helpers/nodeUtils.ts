@@ -35,6 +35,7 @@ import {
   bytesToNumberBE,
   calculateMedian,
   Curve,
+  derivePubKey,
   generatePrivateKey,
   getProxyCoordinatorEndpointIndex,
   hexToBytes,
@@ -48,7 +49,7 @@ import {
   toBigIntBE,
   utf8ToBytes,
 } from "./common";
-import { derivePubKey, generateAddressFromPrivKey, generateAddressFromPubKey, generateShares } from "./keyUtils";
+import { generateAddressFromPrivKey, generateAddressFromPubKey, generateShares } from "./keyUtils";
 import { lagrangeInterpolation } from "./langrangeInterpolatePoly";
 import {
   decryptNodeData,
@@ -603,7 +604,7 @@ export async function retrieveOrImportShare(params: {
       shareResponses = shareResponseResult as (void | JRPCResponse<ShareRequestResult>)[];
     }
     // check if threshold number of nodes have returned the same user public key
-    const completedRequests = shareResponses.filter((x) => {
+    const completedRequests = shareResponses.filter((x): x is JRPCResponse<ShareRequestResult> => {
       if (!x || typeof x !== "object") {
         return false;
       }
@@ -653,7 +654,7 @@ export async function retrieveOrImportShare(params: {
       const serverTimeOffsetResponses: string[] = [];
 
       for (let i = 0; i < completedRequests.length; i += 1) {
-        const currentShareResponse = completedRequests[i] as JRPCResponse<ShareRequestResult>;
+        const currentShareResponse = completedRequests[i];
         const {
           session_tokens: sessionTokens,
           session_token_metadata: sessionTokenMetadata,
@@ -741,13 +742,14 @@ export async function retrieveOrImportShare(params: {
         throw new Error(`Insufficient number of session tokens from nodes, required: ${halfThreshold}, found: ${validTokens.length}`);
       }
       sessionTokensResolved.forEach((x, index) => {
-        if (!x || !sessionSigsResolved[index]) sessionTokenData.push(undefined);
+        const sig = sessionSigsResolved[index];
+        if (!x || !sig) sessionTokenData.push(undefined);
         else
           sessionTokenData.push({
-            token: bytesToBase64(x as Uint8Array),
-            signature: bytesToHex(sessionSigsResolved[index] as Uint8Array),
-            node_pubx: (completedRequests[index] as JRPCResponse<ShareRequestResult>).result.node_pubx,
-            node_puby: (completedRequests[index] as JRPCResponse<ShareRequestResult>).result.node_puby,
+            token: bytesToBase64(x),
+            signature: bytesToHex(sig),
+            node_pubx: completedRequests[index].result.node_pubx,
+            node_puby: completedRequests[index].result.node_puby,
           });
       });
 
@@ -756,7 +758,7 @@ export async function retrieveOrImportShare(params: {
       const decryptedShares = sharesResolved.reduce(
         (acc, curr, index) => {
           if (curr) {
-            acc.push({ index: nodeIndexes[index], value: bytesToNumberBE(curr as Uint8Array) });
+            acc.push({ index: nodeIndexes[index], value: bytesToNumberBE(curr) });
           }
           return acc;
         },
@@ -865,14 +867,14 @@ export async function retrieveOrImportShare(params: {
           // for imported keys in legacy networks
           metadataNonce = await getMetadata(legacyMetadataHost, { pub_key_X: oAuthPubkeyX, pub_key_Y: oAuthPubkeyY });
           const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
-          finalPubKey = ecCurve.Point.BASE.multiply(privateKeyWithNonce).toAffine();
+          finalPubKey = derivePubKey(ecCurve, privateKeyWithNonce);
         }
       } else {
         typeOfUser = "v1";
         // for imported keys in legacy networks
         metadataNonce = await getMetadata(legacyMetadataHost, { pub_key_X: oAuthPubkeyX, pub_key_Y: oAuthPubkeyY });
         const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
-        finalPubKey = ecCurve.Point.BASE.multiply(privateKeyWithNonce).toAffine();
+        finalPubKey = derivePubKey(ecCurve, privateKeyWithNonce);
       }
     } else {
       typeOfUser = "v2";
