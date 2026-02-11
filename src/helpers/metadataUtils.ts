@@ -28,7 +28,7 @@ import {
   Curve,
   encParamsHexToBuf,
   hexToBytes,
-  keccak256,
+  keccak256Bytes,
   numberToBytesBE,
   toBigIntBE,
   utf8ToBytes,
@@ -62,21 +62,21 @@ export function convertMetadataToNonce(params: { message?: string }): bigint {
 
 export async function decryptNodeData(eciesData: EciesHex, ciphertextHex: string, privKey: Uint8Array): Promise<Uint8Array> {
   const metadata = encParamsHexToBuf(eciesData);
-  const decryptedSigBuffer = await decrypt(privKey, {
+  const decryptedSigBytes = await decrypt(privKey, {
     ...metadata,
     ciphertext: hexToBytes(ciphertextHex),
   });
-  return decryptedSigBuffer;
+  return decryptedSigBytes;
 }
 
 export async function decryptNodeDataWithPadding(eciesData: EciesHex, ciphertextHex: string, privKey: Uint8Array): Promise<Uint8Array> {
   const metadata = encParamsHexToBuf(eciesData);
   try {
-    const decryptedSigBuffer = await decrypt(privKey, {
+    const decryptedSigBytes = await decrypt(privKey, {
       ...metadata,
       ciphertext: hexToBytes(ciphertextHex),
     });
-    return decryptedSigBuffer;
+    return decryptedSigBytes;
   } catch (error) {
     // ciphertext can be any length. not just 64. depends on input. we have this for legacy reason
     const ciphertextHexPadding = ciphertextHex.padStart(64, "0");
@@ -92,7 +92,7 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
     data: message,
     timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
-  const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
+  const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
   // metadata only uses secp for sig validation; prehash: false because msgHash is already hashed
   const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
   const pubKey = ecCurve.Point.BASE.multiply(privateKey).toAffine();
@@ -145,7 +145,7 @@ export function generateNonceMetadataParams(
     setData.seed = ""; // setting it as empty to keep ordering same while serializing the data on backend.
   }
 
-  const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
+  const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
   const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privateKey)), { prehash: false });
   const pubKey = secp256k1.Point.BASE.multiply(privateKey).toAffine();
   return {
@@ -256,7 +256,7 @@ export async function getOrSetSapphireMetadataNonce(
       operation: "getOrSetNonce",
       timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
     };
-    const msgHash = hexToBytes(keccak256(utf8ToBytes(stringify(setData))).slice(2));
+    const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
     const sig = secp256k1.sign(msgHash, hexToBytes(bigintToHex(privKey)), { prehash: false });
     const pubKey = secp256k1.Point.BASE.multiply(privKey).toAffine();
     data = {

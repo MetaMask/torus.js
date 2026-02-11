@@ -54,9 +54,15 @@ export function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+/** Returns keccak256 hash as hex string (0x-prefixed). Use keccak256Bytes when you need bytes to avoid double conversion. */
 export function keccak256(a: Uint8Array): string {
   const hash = bytesToHex(keccakHash(a));
   return `0x${hash}`;
+}
+
+/** Returns keccak256 hash as raw bytes. Use instead of hexToBytes(keccak256(...)) to avoid double conversion. */
+export function keccak256Bytes(a: Uint8Array): Uint8Array {
+  return keccakHash(a);
 }
 
 export const generatePrivateKey = (keyType: KeyType): Uint8Array => {

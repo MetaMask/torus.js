@@ -15,6 +15,7 @@ import {
   getOrSetNonce,
   GetOrSetNonceError,
   GetPubKeyOrKeyAssign,
+  hexToBytes,
   retrieveOrImportShare,
   toBigIntBE,
 } from "./helpers";
@@ -203,27 +204,26 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
-    let privKeyBuffer;
+    let privKeyBytes: Uint8Array;
 
     if (this.keyType === KEY_TYPE.SECP256K1) {
-      privKeyBuffer = Buffer.from(newPrivateKey.padStart(64, "0"), "hex");
-      if (privKeyBuffer.length !== 32) {
+      privKeyBytes = hexToBytes(newPrivateKey.padStart(64, "0"));
+      if (privKeyBytes.length !== 32) {
         throw new Error("Invalid private key length for given secp256k1 key");
       }
-    }
-    if (this.keyType === KEY_TYPE.ED25519) {
-      privKeyBuffer = Buffer.from(newPrivateKey.padStart(64, "0"), "hex");
-      if (privKeyBuffer.length !== 32) {
+    } else {
+      privKeyBytes = hexToBytes(newPrivateKey.padStart(64, "0"));
+      if (privKeyBytes.length !== 32) {
         throw new Error("Invalid private key length for given ed25519 key");
       }
     }
 
-    const sharesData = await generateShares(this.ec, this.keyType, this.serverTimeOffset, nodeIndexes, nodePubkeys, privKeyBuffer);
+    const sharesData = await generateShares(this.ec, this.keyType, this.serverTimeOffset, nodeIndexes, nodePubkeys, privKeyBytes);
     if (this.keyType === KEY_TYPE.ED25519) {
-      const ed25519Key = getEd25519ExtendedPublicKey(privKeyBuffer);
+      const ed25519Key = getEd25519ExtendedPublicKey(privKeyBytes);
       const ed25519PubKey = encodeEd25519Point(ed25519Key.point);
       const encodedPubKey = encodeEd25519Point(sharesData[0].final_user_point);
-      const importedPubKey = Buffer.from(ed25519PubKey).toString("hex");
+      const importedPubKey = bytesToHex(ed25519PubKey);
       const derivedPubKey = bytesToHex(encodedPubKey);
       if (importedPubKey !== derivedPubKey) {
         throw new Error("invalid shares data for ed25519 key, public key is not matching after generating shares");

@@ -60,7 +60,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 }
 
 /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
-export function getEd25519ExtendedPublicKey(keyBuffer: Uint8Array): {
+export function getEd25519ExtendedPublicKey(keyBytes: Uint8Array): {
   scalar: bigint;
   point: Point2D;
 } {
@@ -68,13 +68,13 @@ export function getEd25519ExtendedPublicKey(keyBuffer: Uint8Array): {
   const len = 32;
   const N = ed25519Curve.Point.CURVE().n;
 
-  if (keyBuffer.length !== 32) {
-    log.error("Invalid seed for ed25519 key derivation", keyBuffer.length);
+  if (keyBytes.length !== 32) {
+    log.error("Invalid seed for ed25519 key derivation", keyBytes.length);
     throw new Error("Invalid seed for ed25519 key derivation");
   }
   // Hash private key with curve's hash function to produce uniformingly random input
   // Check byte lengths: ensure(64, h(ensure(32, key)))
-  const hashed = sha512(keyBuffer);
+  const hashed = sha512(keyBytes);
   if (hashed.length !== 64) {
     throw new Error("Invalid hash length for ed25519 seed");
   }
@@ -122,11 +122,11 @@ export const generateEd25519KeyData = async (ed25519Seed: Uint8Array): Promise<P
   };
 };
 
-export const generateSecp256k1KeyData = async (scalarBuffer: Uint8Array): Promise<PrivateKeyData> => {
+export const generateSecp256k1KeyData = async (scalarBytes: Uint8Array): Promise<PrivateKeyData> => {
   const secp256k1Curve = getKeyCurve(KEY_TYPE.SECP256K1);
   const N = secp256k1Curve.Point.CURVE().n;
 
-  const scalar = bytesToNumberBE(scalarBuffer);
+  const scalar = bytesToNumberBE(scalarBytes);
   const randomNonce = bytesToNumberBE(generatePrivateKey(KEY_TYPE.SECP256K1));
   const oAuthKey = mod(scalar - randomNonce, N);
   const oAuthPub = secp256k1Curve.Point.BASE.multiply(oAuthKey).toAffine();
@@ -148,9 +148,9 @@ export const generateSecp256k1KeyData = async (scalarBuffer: Uint8Array): Promis
 
 function generateAddressFromPoint(keyType: KeyType, point: Point2D): string {
   if (keyType === KEY_TYPE.SECP256K1) {
-    const uncompressed = bytesToHex(getSecp256k1().Point.fromAffine(point).toBytes(false));
-    const publicKey = uncompressed.slice(2); // remove 04 prefix
-    const evmAddressLower = `0x${keccak256(hexToBytes(publicKey)).slice(64 - 38)}`;
+    const uncompressed = getSecp256k1().Point.fromAffine(point).toBytes(false);
+    const publicKey = uncompressed.slice(1); // remove 04 prefix
+    const evmAddressLower = `0x${keccak256(publicKey).slice(64 - 38)}`;
     return toChecksumAddress(evmAddressLower);
   } else if (keyType === KEY_TYPE.ED25519) {
     const publicKey = encodeEd25519Point(point);
