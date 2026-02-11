@@ -1,19 +1,19 @@
 import { bigintToHex, toBigIntBE } from "./helpers/common";
-import { BigIntString, ShareJSON, StringifiedType } from "./interfaces";
+import { ShareJSON, StringifiedType } from "./interfaces";
 
 class Share {
   share: bigint;
 
   shareIndex: bigint;
 
-  constructor(shareIndex: BigIntString, share: BigIntString) {
-    this.share = toBigIntBE(share);
-    this.shareIndex = toBigIntBE(shareIndex);
+  constructor(shareIndex: bigint, share: bigint) {
+    this.share = share;
+    this.shareIndex = shareIndex;
   }
 
   static fromJSON(value: StringifiedType): Share {
     const { share, shareIndex } = value as ShareJSON;
-    return new Share(shareIndex, share);
+    return new Share(toBigIntBE(shareIndex), toBigIntBE(share));
   }
 
   toJSON(): ShareJSON {

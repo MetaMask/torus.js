@@ -69,14 +69,13 @@ export function keccak256Bytes(a: Uint8Array): Uint8Array {
   return keccakHash(a);
 }
 
-export const generatePrivateKey = (keyType: KeyType): Uint8Array => {
-  if (keyType === KEY_TYPE.SECP256K1) {
-    return secp256k1.utils.randomSecretKey();
-  } else if (keyType === KEY_TYPE.ED25519) {
-    return ed25519.utils.randomSecretKey();
-  }
-  throw new Error(`Invalid keyType: ${keyType}`);
-};
+/** Generate a random private key. Prefer passing ecCurve when you already have it (better for tree-shaking). */
+export function generatePrivateKey(keyType: KeyType): Uint8Array;
+export function generatePrivateKey(ecCurve: Curve): Uint8Array;
+export function generatePrivateKey(ecCurveOrKeyType: Curve | KeyType): Uint8Array {
+  const ec = typeof ecCurveOrKeyType === "string" ? getKeyCurve(ecCurveOrKeyType) : ecCurveOrKeyType;
+  return ec.utils.randomSecretKey();
+}
 
 export const getSecp256k1 = () => secp256k1;
 export const getEd25519 = () => ed25519;
@@ -170,6 +169,7 @@ export const thresholdSame = <T>(arr: T[], t: number): T | undefined => {
   return undefined;
 };
 
+/** ECIES params: bytes → hex. \@toruslabs/eccrypto v7 does not export these; we keep them local. */
 export function encParamsBufToHex(encParams: Ecies): EciesHex {
   return {
     iv: bytesToHex(encParams.iv),
@@ -180,6 +180,7 @@ export function encParamsBufToHex(encParams: Ecies): EciesHex {
   };
 }
 
+/** ECIES params: hex → bytes. \@toruslabs/eccrypto v7 does not export these; we keep them local. */
 export function encParamsHexToBuf(eciesData: Omit<EciesHex, "ciphertext">): Omit<Ecies, "ciphertext"> {
   return {
     ephemPublicKey: hexToBytes(eciesData.ephemPublicKey),
