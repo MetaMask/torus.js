@@ -82,9 +82,9 @@ export const getEd25519 = () => ed25519;
 
 export const getKeyCurve = (keyType: KeyType): Curve => {
   if (keyType === KEY_TYPE.SECP256K1) {
-    return secp256k1;
+    return getSecp256k1();
   } else if (keyType === KEY_TYPE.ED25519) {
-    return ed25519;
+    return getEd25519();
   }
   throw new Error(`Invalid keyType: ${keyType}`);
 };

@@ -1,5 +1,4 @@
 import { mod } from "@noble/curves/abstract/modular.js";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { KEY_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { decrypt } from "@toruslabs/eccrypto";
 import { Data, post } from "@toruslabs/http-helpers";
@@ -28,6 +27,7 @@ import {
   Curve,
   derivePubKey,
   encParamsHexToBuf,
+  getSecp256k1,
   hexToBytes,
   keccak256Bytes,
   numberToBytesBE,
@@ -42,6 +42,7 @@ export const getSecpKeyFromEd25519 = (
   scalar: bigint;
   point: Point2D;
 } => {
+  const secp256k1 = getSecp256k1();
   const N = secp256k1.Point.CURVE().n;
 
   const keyHash = keccakHash(numberToBytesBE(ed25519Scalar, 32));
@@ -93,6 +94,7 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
     data: message,
     timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
+  const secp256k1 = getSecp256k1();
   const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
   // metadata only uses secp for sig validation; prehash: false because msgHash is already hashed
   const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
@@ -146,6 +148,7 @@ export function generateNonceMetadataParams(
     setData.seed = ""; // setting it as empty to keep ordering same while serializing the data on backend.
   }
 
+  const secp256k1 = getSecp256k1();
   const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
   const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
   const pubKey = derivePubKey(secp256k1, privateKey);
@@ -257,6 +260,7 @@ export async function getOrSetSapphireMetadataNonce(
       operation: "getOrSetNonce",
       timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
     };
+    const secp256k1 = getSecp256k1();
     const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
     const sig = secp256k1.sign(msgHash, numberToBytesBE(privKey, 32), { prehash: false });
     const pubKey = derivePubKey(secp256k1, privKey);
