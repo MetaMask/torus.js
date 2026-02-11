@@ -1,6 +1,6 @@
 import { mod } from "@noble/curves/abstract/modular.js";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
+import { KEY_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { decrypt } from "@toruslabs/eccrypto";
 import { Data, post } from "@toruslabs/http-helpers";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
@@ -34,6 +34,7 @@ import {
   toBigIntBE,
   utf8ToBytes,
 } from "./common";
+import { isLegacyNetwork } from "./networkUtils";
 
 export const getSecpKeyFromEd25519 = (
   ed25519Scalar: bigint
@@ -243,7 +244,7 @@ export async function getOrSetSapphireMetadataNonce(
   serverTimeOffset?: number,
   privKey?: bigint
 ): Promise<GetOrSetNonceResult> {
-  if (LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+  if (isLegacyNetwork(network)) {
     throw new Error("getOrSetSapphireMetadataNonce should only be used for sapphire networks");
   }
   let data: SapphireMetadataParams = {

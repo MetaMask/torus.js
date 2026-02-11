@@ -1,4 +1,4 @@
-import { INodePub, KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, SIGNER_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { INodePub, KEY_TYPE, SIGNER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
 import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
 
@@ -59,6 +59,7 @@ import {
   getOrSetSapphireMetadataNonce,
   getSecpKeyFromEd25519,
 } from "./metadataUtils";
+import { isLegacyNetwork } from "./networkUtils";
 
 export const GetPubKeyOrKeyAssign = async (params: {
   endpoints: string[];
@@ -109,7 +110,7 @@ export const GetPubKeyOrKeyAssign = async (params: {
     );
 
     // check for nonce result in response if not a extendedVerifierId and not a legacy network
-    if (keyResult && !nonceResult && !extendedVerifierId && !LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (keyResult && !nonceResult && !extendedVerifierId && !isLegacyNetwork(network)) {
       for (let i = 0; i < lookupResults.length; i++) {
         const x1 = lookupResults[i];
         if (x1 && !x1.error) {
@@ -139,7 +140,7 @@ export const GetPubKeyOrKeyAssign = async (params: {
 
     const serverTimeOffsets: number[] = [];
     // nonceResult must exist except for extendedVerifierId and legacy networks along with keyResult
-    if ((keyResult && (nonceResult || extendedVerifierId || LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE])) || errorResult) {
+    if ((keyResult && (nonceResult || extendedVerifierId || isLegacyNetwork(network))) || errorResult) {
       if (keyResult) {
         lookupResults.forEach((x1) => {
           if (x1 && x1.result) {
@@ -467,10 +468,9 @@ export async function retrieveOrImportShare(params: {
     // check if key exists
     if (!overrideExistingKey) {
       const keyLookupResult = await VerifierLookupRequest({ endpoints, verifier, verifierId: verifierParams.verifier_id, keyType });
-      if (
-        keyLookupResult.errorResult &&
-        !(keyLookupResult.errorResult?.data as string)?.includes("Verifier + VerifierID has not yet been assigned")
-      ) {
+      const errorData = keyLookupResult.errorResult?.data;
+      const isUnassignedVerifier = typeof errorData === "string" && errorData.includes("Verifier + VerifierID has not yet been assigned");
+      if (keyLookupResult.errorResult && !isUnassignedVerifier) {
         throw new Error(
           `node results do not match at first lookup ${JSON.stringify(keyLookupResult.keyResult || {})}, ${JSON.stringify(keyLookupResult.errorResult || {})}`
         );
@@ -812,7 +812,7 @@ export async function retrieveOrImportShare(params: {
 
     // if both thresholdNonceData and extended_verifier_id are not available
     // then we need to throw other wise address would be incorrect.
-    if (!nonceResult && !verifierParams.extended_verifier_id && !LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (!nonceResult && !verifierParams.extended_verifier_id && !isLegacyNetwork(network)) {
       // NOTE: dont use padded pub key anywhere in metadata apis, send pub keys as is received from nodes.
       const metadataNonceResult = await getOrSetSapphireMetadataNonce(network, thresholdPubKey.X, thresholdPubKey.Y, serverTimeOffset, oAuthKey);
       // rechecking nonceResult to avoid promise race condition.
@@ -835,7 +835,7 @@ export async function retrieveOrImportShare(params: {
       typeOfUser = "v2";
       // for tss key no need to add pub nonce
       finalPubKey = oAuthPubKey;
-    } else if (LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+    } else if (isLegacyNetwork(network)) {
       if (enableOneKey) {
         nonceResult = await getOrSetNonce(legacyMetadataHost, ecCurve, serverTimeOffsetResponse, oAuthPubkeyX, oAuthPubkeyY, oAuthKey, !isNewKey);
         metadataNonce = nonceResult.nonce ? toBigIntBE(nonceResult.nonce) : 0n;
@@ -861,7 +861,10 @@ export async function retrieveOrImportShare(params: {
         const privateKeyWithNonce = mod(oAuthKey + metadataNonce, N);
         finalPubKey = derivePubKey(ecCurve, privateKeyWithNonce);
       }
-    } else if (isV2NonceResult(nonceResult)) {
+    } else {
+      if (!isV2NonceResult(nonceResult)) {
+        throw new Error("nonceResult must be a v2NonceResult");
+      }
       typeOfUser = "v2";
       const noncePubKey = {
         x: toBigIntBE(nonceResult.pubNonce.x),
@@ -951,6 +954,6 @@ export async function retrieveOrImportShare(params: {
       nodesData: {
         nodeIndexes: nodeIndexes.map((x) => Number(x)),
       },
-    } as TorusKey;
+    } satisfies TorusKey;
   });
 }

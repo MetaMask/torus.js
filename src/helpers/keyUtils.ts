@@ -29,7 +29,8 @@ import { generateRandomPolynomial } from "./langrangeInterpolatePoly";
 import { generateNonceMetadataParams, getSecpKeyFromEd25519 } from "./metadataUtils";
 
 export function isV2NonceResult(r: GetOrSetNonceResult): r is v2NonceResultType {
-  return r.typeOfUser === "v2";
+  if (!r) return false;
+  return (r as v2NonceResultType).pubNonce !== undefined || r.typeOfUser === "v2";
 }
 
 export function stripHexPrefix(str: string): string {
