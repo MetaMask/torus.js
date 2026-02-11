@@ -280,7 +280,7 @@ const commitmentRequest = async (params: {
   return new Promise<(void | JRPCResponse<CommitmentRequestResult>)[]>((resolve, reject) => {
     // send share request once k + t number of commitment requests have completed
     Some<void | JRPCResponse<CommitmentRequestResult>, (void | JRPCResponse<CommitmentRequestResult>)[]>(promiseArr, (resultArr) => {
-      const completedRequests = resultArr.filter((x) => {
+      const completedRequests = resultArr.filter((x): x is JRPCResponse<CommitmentRequestResult> => {
         if (!x || typeof x !== "object") {
           return false;
         }
@@ -295,12 +295,7 @@ const commitmentRequest = async (params: {
         // for new imported keys registration we need to wait for all nodes to agree on commitment
         // for fetching existing imported keys we can rely on threshold nodes commitment
         if (overrideExistingKey && completedRequests.length === endpoints.length) {
-          const requiredNodeResult = completedRequests.find((resp: void | JRPCResponse<CommitmentRequestResult>) => {
-            if (resp) {
-              return true;
-            }
-            return false;
-          });
+          const requiredNodeResult = completedRequests.find((resp) => !!resp);
           if (requiredNodeResult) {
             return Promise.resolve(resultArr);
           }
@@ -311,7 +306,7 @@ const commitmentRequest = async (params: {
             if (!x || typeof x !== "object" || x.error) {
               continue;
             }
-            if (x) nodeSigs.push((x as JRPCResponse<CommitmentRequestResult>).result);
+            nodeSigs.push(x.result);
           }
           const existingPubKey = thresholdSame(
             nodeSigs.map((x) => x && x.pub_key_x),
@@ -325,12 +320,7 @@ const commitmentRequest = async (params: {
 
           // if not a existing key we need to wait for nodes to agree on commitment
           if (existingPubKey || (!existingPubKey && completedRequests.length === endpoints.length)) {
-            const requiredNodeResult = completedRequests.find((resp: void | JRPCResponse<CommitmentRequestResult>) => {
-              if (resp && resp.result?.nodeindex === requiredNodeIndex) {
-                return true;
-              }
-              return false;
-            });
+            const requiredNodeResult = completedRequests.find((resp) => resp.result?.nodeindex === requiredNodeIndex);
             if (requiredNodeResult) {
               return Promise.resolve(resultArr);
             }
@@ -338,12 +328,7 @@ const commitmentRequest = async (params: {
         }
       } else if (completedRequests.length >= threeFourthsThreshold) {
         // this case is for dkg keys
-        const requiredNodeResult = completedRequests.find((resp: void | JRPCResponse<CommitmentRequestResult>) => {
-          if (resp) {
-            return true;
-          }
-          return false;
-        });
+        const requiredNodeResult = completedRequests.find((resp) => !!resp);
         if (requiredNodeResult) {
           return Promise.resolve(resultArr);
         }
@@ -466,12 +451,11 @@ export async function retrieveOrImportShare(params: {
       finalImportedShares,
       overrideExistingKey,
     });
-    for (let i = 0; i < commitmentRequestResult.length; i += 1) {
-      const x = commitmentRequestResult[i];
-      if (!x || typeof x !== "object" || x.error) {
-        continue;
-      }
-      if (x) nodeSigs.push((x as JRPCResponse<CommitmentRequestResult>).result);
+    const validCommitments = commitmentRequestResult.filter(
+      (x): x is JRPCResponse<CommitmentRequestResult> => !!x && typeof x === "object" && !x.error
+    );
+    for (const x of validCommitments) {
+      nodeSigs.push(x.result);
     }
     // if user's account already
     isExistingKey = !!thresholdSame(

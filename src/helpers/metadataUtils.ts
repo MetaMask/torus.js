@@ -226,10 +226,10 @@ export const decryptSeedData = async (seedBase64: string, finalUserKey: bigint) 
   const decryptionKey = getSecpKeyFromEd25519(finalUserKey);
   const seedUtf8 = new TextDecoder().decode(base64ToBytes(seedBase64));
   const seedJson = JSON.parse(seedUtf8) as EncryptedSeed;
-  const bufferMetadata = { ...encParamsHexToBuf(seedJson.metadata), mode: "AES256" };
+  const eciesMetadata = { ...encParamsHexToBuf(seedJson.metadata), mode: "AES256" };
   const keyBytes = numberToBytesBE(decryptionKey.scalar, 32);
   const decText = await decrypt(keyBytes, {
-    ...bufferMetadata,
+    ...eciesMetadata,
     ciphertext: hexToBytes(seedJson.enc_text),
   });
 
