@@ -5,6 +5,7 @@ import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
 import {
+  AffinePoint,
   CommitmentRequestResult,
   ExtendedPublicKey,
   GetORSetKeyResponse,
@@ -14,7 +15,6 @@ import {
   JRPCResponse,
   KeyLookupResult,
   KeyType,
-  Point2D,
   SessionToken,
   ShareRequestResult,
   TorusKey,
@@ -825,7 +825,7 @@ export async function retrieveOrImportShare(params: {
       }
     }
     let metadataNonce = nonceResult?.nonce ? toBigIntBE(nonceResult.nonce) : 0n;
-    let finalPubKey: Point2D;
+    let finalPubKey: AffinePoint;
     let pubNonce: { X: string; Y: string } | undefined;
     let typeOfUser: UserType = "v1";
     const N = ecCurve.Point.CURVE().n;

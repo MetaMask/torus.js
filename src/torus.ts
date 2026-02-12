@@ -22,11 +22,11 @@ import {
   toBigIntBE,
 } from "./helpers";
 import {
+  AffinePoint,
   GetOrSetNonceResult,
   ImportKeyParams,
   KeyType,
   LegacyVerifierLookupResponse,
-  Point2D,
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
@@ -310,8 +310,8 @@ class Torus {
     const { pub_key_X: X, pub_key_Y: Y } = keyResult.keys[0];
     let pubNonce: { X: string; Y: string } | undefined;
     const nonce = toBigIntBE(nonceResult?.nonce || "0");
-    let oAuthPubKey: Point2D;
-    let finalPubKey: Point2D;
+    let oAuthPubKey: AffinePoint;
+    let finalPubKey: AffinePoint;
     if (extendedVerifierId) {
       // for tss key no need to add pub nonce
       finalPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
@@ -388,11 +388,11 @@ class Torus {
     const { pub_key_X: X, pub_key_Y: Y } = finalKeyResult.keys[0];
     let nonceResult: GetOrSetNonceResult;
     let nonce: bigint;
-    let finalPubKey: Point2D;
+    let finalPubKey: AffinePoint;
     let typeOfUser: GetOrSetNonceResult["typeOfUser"];
     let pubNonce: { X: string; Y: string } | undefined;
 
-    const oAuthPubKey: Point2D = { x: toBigIntBE(X), y: toBigIntBE(Y) };
+    const oAuthPubKey: AffinePoint = { x: toBigIntBE(X), y: toBigIntBE(Y) };
 
     const finalServerTimeOffset = this.serverTimeOffset || serverTimeOffset;
     if (enableOneKey) {

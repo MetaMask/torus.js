@@ -1,9 +1,10 @@
+import type { AffinePoint as AffinePointCurve } from "@noble/curves/abstract/curve.js";
 import type { INodePub, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
 
 import { TorusUtilsExtraParams } from "./TorusUtilsExtraParams";
 
-export type Point2D = { x: bigint; y: bigint };
+export type AffinePoint = AffinePointCurve<bigint>;
 
 export interface KeyIndex {
   index: string;
@@ -152,7 +153,7 @@ export interface ShareRequestResult {
 export interface ImportedShare {
   oauth_pub_key_x: string;
   oauth_pub_key_y: string;
-  final_user_point: Point2D;
+  final_user_point: AffinePoint;
   signing_pub_key_x: string;
   signing_pub_key_y: string;
   encrypted_share: string;
@@ -254,7 +255,7 @@ export interface PrivateKeyData {
   SigningPubY: bigint;
   metadataNonce: bigint;
   metadataSigningKey: bigint;
-  finalUserPubKeyPoint: Point2D;
+  finalUserPubKeyPoint: AffinePoint;
   encryptedSeed?: string;
 }
 

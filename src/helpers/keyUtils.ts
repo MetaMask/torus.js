@@ -7,7 +7,7 @@ import { sha512 } from "ethereum-cryptography/sha512";
 import stringify from "json-stable-stringify";
 import log from "loglevel";
 
-import { EncryptedSeed, GetOrSetNonceResult, ImportedShare, KeyType, Point2D, PrivateKeyData, ShareJSON, v2NonceResultType } from "../interfaces";
+import { AffinePoint, EncryptedSeed, GetOrSetNonceResult, ImportedShare, KeyType, PrivateKeyData, ShareJSON, v2NonceResultType } from "../interfaces";
 import {
   bigintToHex,
   bytesToBase64,
@@ -68,7 +68,7 @@ function adjustScalarBytes(bytes: Uint8Array): Uint8Array {
 /** Convenience method that creates public key and other stuff. RFC8032 5.1.5 */
 export function getEd25519ExtendedPublicKey(keyBytes: Uint8Array): {
   scalar: bigint;
-  point: Point2D;
+  point: AffinePoint;
 } {
   const ed25519Curve = getKeyCurve(KEY_TYPE.ED25519);
   const len = 32;
@@ -90,7 +90,7 @@ export function getEd25519ExtendedPublicKey(keyBytes: Uint8Array): {
   return { scalar, point };
 }
 
-export function encodeEd25519Point(point: Point2D): Uint8Array {
+export function encodeEd25519Point(point: AffinePoint): Uint8Array {
   const ed25519Curve = getKeyCurve(KEY_TYPE.ED25519);
   return ed25519Curve.Point.fromAffine(point).toBytes();
 }
@@ -152,10 +152,9 @@ export const generateSecp256k1KeyData = async (scalarBytes: Uint8Array): Promise
   };
 };
 
-function generateAddressFromPoint(keyType: KeyType, point: Point2D): string {
+function generateAddressFromPoint(keyType: KeyType, point: AffinePoint): string {
   if (keyType === KEY_TYPE.SECP256K1) {
-    const uncompressed = getSecp256k1().Point.fromAffine(point).toBytes(false);
-    const publicKey = uncompressed.slice(1); // remove 04 prefix
+    const publicKey = getSecp256k1PublicKeyFromAffinePoint(point);
     const evmAddressLower = `0x${keccak256(publicKey).slice(64 - 38)}`;
     return toChecksumAddress(evmAddressLower);
   } else if (keyType === KEY_TYPE.ED25519) {
@@ -180,6 +179,12 @@ export function getPostboxKeyFrom1OutOf1(ecCurve: Curve, privKey: string, nonce:
   const privKeyBI = toBigIntBE(privKey);
   const nonceBI = toBigIntBE(nonce);
   return bigintToHex(mod(privKeyBI - nonceBI, ecCurve.Point.CURVE().n));
+}
+
+export function getSecp256k1PublicKeyFromAffinePoint(point: AffinePoint): Uint8Array {
+  const uncompressed = getSecp256k1().Point.fromAffine(point).toBytes(false);
+  const publicKey = uncompressed.slice(1); // remove 04 prefix
+  return publicKey;
 }
 
 export const generateShares = async (

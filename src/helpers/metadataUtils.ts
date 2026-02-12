@@ -8,13 +8,13 @@ import log from "loglevel";
 
 import { SAPPHIRE_DEVNET_METADATA_URL, SAPPHIRE_METADATA_URL } from "../constants";
 import {
+  AffinePoint,
   EciesHex,
   EncryptedSeed,
   GetOrSetNonceResult,
   KeyType,
   MetadataParams,
   NonceMetadataParams,
-  Point2D,
   SapphireMetadataParams,
   SetNonceData,
 } from "../interfaces";
@@ -40,7 +40,7 @@ export const getSecpKeyFromEd25519 = (
   ed25519Scalar: bigint
 ): {
   scalar: bigint;
-  point: Point2D;
+  point: AffinePoint;
 } => {
   const secp256k1 = getSecp256k1();
   const N = secp256k1.Point.CURVE().n;
