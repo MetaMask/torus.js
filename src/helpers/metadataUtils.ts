@@ -1,14 +1,14 @@
-import { KEY_TYPE, LEGACY_NETWORKS_ROUTE_MAP, TORUS_LEGACY_NETWORK_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
+import { mod } from "@noble/curves/abstract/modular.js";
+import { KEY_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { decrypt } from "@toruslabs/eccrypto";
 import { Data, post } from "@toruslabs/http-helpers";
-import BN from "bn.js";
-import { curve, ec as EC } from "elliptic";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import stringify from "json-stable-stringify";
 import log from "loglevel";
 
 import { SAPPHIRE_DEVNET_METADATA_URL, SAPPHIRE_METADATA_URL } from "../constants";
 import {
+  AffinePoint,
   EciesHex,
   EncryptedSeed,
   GetOrSetNonceResult,
@@ -18,78 +18,92 @@ import {
   SapphireMetadataParams,
   SetNonceData,
 } from "../interfaces";
-import { encParamsHexToBuf, getKeyCurve, keccak256 } from "./common";
+import {
+  base64ToBytes,
+  bigintToHex,
+  bytesToBase64,
+  bytesToNumberBE,
+  concatBytes,
+  Curve,
+  derivePubKey,
+  encParamsHexToBuf,
+  getSecp256k1,
+  hexToBytes,
+  keccak256Bytes,
+  numberToBytesBE,
+  toBigIntBE,
+  utf8ToBytes,
+} from "./common";
+import { isLegacyNetwork } from "./networkUtils";
 
 export const getSecpKeyFromEd25519 = (
-  ed25519Scalar: BN
+  ed25519Scalar: bigint
 ): {
-  scalar: BN;
-  point: curve.base.BasePoint;
+  scalar: bigint;
+  point: AffinePoint;
 } => {
-  const secp256k1Curve = getKeyCurve(KEY_TYPE.SECP256K1);
+  const secp256k1 = getSecp256k1();
+  const N = secp256k1.Point.CURVE().n;
 
-  const ed25519Key = ed25519Scalar.toString("hex", 64);
-  const keyHash = keccakHash(Buffer.from(ed25519Key, "hex"));
-  const secpKey = new BN(keyHash).umod(secp256k1Curve.n).toString("hex", 64);
-  const bufferKey = Buffer.from(secpKey, "hex");
+  const keyHash = keccakHash(numberToBytesBE(ed25519Scalar, 32));
+  const secpScalar = mod(bytesToNumberBE(keyHash), N);
+  const point = derivePubKey(secp256k1, secpScalar);
 
-  const secpKeyPair = secp256k1Curve.keyFromPrivate(bufferKey);
-
-  if (bufferKey.length !== 32) {
-    throw new Error(`Key length must be equal to 32. got ${bufferKey.length}`);
-  }
   return {
-    scalar: secpKeyPair.getPrivate(),
-    point: secpKeyPair.getPublic(),
+    scalar: secpScalar,
+    point,
   };
 };
 
-export function convertMetadataToNonce(params: { message?: string }) {
+export function convertMetadataToNonce(params: { message?: string }): bigint {
   if (!params || !params.message) {
-    return new BN(0);
+    return 0n;
   }
-  return new BN(params.message, 16);
+  return toBigIntBE(params.message);
 }
 
-export async function decryptNodeData(eciesData: EciesHex, ciphertextHex: string, privKey: Buffer): Promise<Buffer> {
+export async function decryptNodeData(eciesData: EciesHex, ciphertextHex: string, privKey: Uint8Array): Promise<Uint8Array> {
   const metadata = encParamsHexToBuf(eciesData);
-  const decryptedSigBuffer = await decrypt(privKey, {
+  const decryptedSigBytes = await decrypt(privKey, {
     ...metadata,
-    ciphertext: Buffer.from(ciphertextHex, "hex"),
+    ciphertext: hexToBytes(ciphertextHex),
   });
-  return decryptedSigBuffer;
+  return decryptedSigBytes;
 }
 
-export async function decryptNodeDataWithPadding(eciesData: EciesHex, ciphertextHex: string, privKey: Buffer): Promise<Buffer> {
+export async function decryptNodeDataWithPadding(eciesData: EciesHex, ciphertextHex: string, privKey: Uint8Array): Promise<Uint8Array> {
   const metadata = encParamsHexToBuf(eciesData);
   try {
-    const decryptedSigBuffer = await decrypt(privKey, {
+    const decryptedSigBytes = await decrypt(privKey, {
       ...metadata,
-      ciphertext: Buffer.from(ciphertextHex, "hex"),
+      ciphertext: hexToBytes(ciphertextHex),
     });
-    return decryptedSigBuffer;
+    return decryptedSigBytes;
   } catch (error) {
     // ciphertext can be any length. not just 64. depends on input. we have this for legacy reason
     const ciphertextHexPadding = ciphertextHex.padStart(64, "0");
 
     log.warn("Failed to decrypt padded share cipher", error);
     // try without cipher text padding
-    return decrypt(privKey, { ...metadata, ciphertext: Buffer.from(ciphertextHexPadding, "hex") });
+    return decrypt(privKey, { ...metadata, ciphertext: hexToBytes(ciphertextHexPadding) });
   }
 }
 
-export function generateMetadataParams(ecCurve: EC, serverTimeOffset: number, message: string, privateKey: BN): MetadataParams {
-  const key = ecCurve.keyFromPrivate(privateKey.toString("hex", 64), "hex");
+export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number, message: string, privateKey: bigint): MetadataParams {
   const setData = {
     data: message,
-    timestamp: new BN(~~(serverTimeOffset + Date.now() / 1000)).toString(16),
+    timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
-  const sig = key.sign(keccak256(Buffer.from(stringify(setData), "utf8")).slice(2));
+  const secp256k1 = getSecp256k1();
+  const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
+  // metadata only uses secp for sig validation; prehash: false because msgHash is already hashed
+  const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
+  const pubKey = derivePubKey(ecCurve, privateKey);
   return {
-    pub_key_X: key.getPublic().getX().toString("hex"), // DO NOT PAD THIS. BACKEND DOESN'T
-    pub_key_Y: key.getPublic().getY().toString("hex"), // DO NOT PAD THIS. BACKEND DOESN'T
+    pub_key_X: pubKey.x.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
+    pub_key_Y: pubKey.y.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     set_data: setData,
-    signature: Buffer.from(sig.r.toString(16, 64) + sig.s.toString(16, 64) + new BN("").toString(16, 2), "hex").toString("base64"),
+    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
   };
 }
 
@@ -97,36 +111,35 @@ export async function getMetadata(
   legacyMetadataHost: string,
   data: Omit<MetadataParams, "set_data" | "signature">,
   options: RequestInit = {}
-): Promise<BN> {
+): Promise<bigint> {
   try {
     const metadataResponse = await post<{ message?: string }>(`${legacyMetadataHost}/get`, data, options, { useAPIKey: true });
     if (!metadataResponse || !metadataResponse.message) {
-      return new BN(0);
+      return 0n;
     }
-    return new BN(metadataResponse.message, 16); // nonce
+    return toBigIntBE(metadataResponse.message); // nonce
   } catch (error) {
     log.error("get metadata error", error);
-    return new BN(0);
+    return 0n;
   }
 }
 
 export function generateNonceMetadataParams(
   serverTimeOffset: number,
   operation: string,
-  privateKey: BN,
+  privateKey: bigint,
   keyType: KeyType,
-  nonce?: BN,
+  nonce?: bigint,
   seed?: string
 ): NonceMetadataParams {
   // metadata only uses secp for sig validation
-  const key = getKeyCurve(KEY_TYPE.SECP256K1).keyFromPrivate(privateKey.toString("hex", 64), "hex");
   const setData: Partial<SetNonceData> = {
     operation,
-    timestamp: new BN(~~(serverTimeOffset + Date.now() / 1000)).toString(16),
+    timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
   };
 
   if (nonce) {
-    setData.data = nonce.toString("hex", 64);
+    setData.data = bigintToHex(nonce);
   }
 
   if (seed) {
@@ -135,26 +148,29 @@ export function generateNonceMetadataParams(
     setData.seed = ""; // setting it as empty to keep ordering same while serializing the data on backend.
   }
 
-  const sig = key.sign(keccak256(Buffer.from(stringify(setData), "utf8")).slice(2));
+  const secp256k1 = getSecp256k1();
+  const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
+  const sig = secp256k1.sign(msgHash, numberToBytesBE(privateKey, 32), { prehash: false });
+  const pubKey = derivePubKey(secp256k1, privateKey);
   return {
-    pub_key_X: key.getPublic().getX().toString("hex", 64),
-    pub_key_Y: key.getPublic().getY().toString("hex", 64),
+    pub_key_X: bigintToHex(pubKey.x),
+    pub_key_Y: bigintToHex(pubKey.y),
     set_data: setData,
     key_type: keyType,
-    signature: Buffer.from(sig.r.toString(16, 64) + sig.s.toString(16, 64) + new BN("").toString(16, 2), "hex").toString("base64"),
+    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
   };
 }
 
 export async function getOrSetNonce(
   metadataHost: string,
-  ecCurve: EC,
+  ecCurve: Curve,
   serverTimeOffset: number,
   X: string,
   Y: string,
-  privKey?: BN,
+  privKey?: bigint,
   getOnly = false,
   isLegacyMetadata = true,
-  nonce = new BN(0),
+  nonce = 0n,
   keyType: KeyType = "secp256k1",
   seed = ""
 ): Promise<GetOrSetNonceResult> {
@@ -180,7 +196,7 @@ export async function getOrSetNonce(
     if (!privKey) {
       throw new Error("privKey is required while `getOrSetNonce` for non legacy metadata");
     }
-    if (nonce.cmp(new BN(0)) === 0) {
+    if (nonce === 0n) {
       throw new Error("nonce is required while `getOrSetNonce` for non legacy metadata");
     }
     if (keyType === KEY_TYPE.ED25519 && !seed) {
@@ -200,24 +216,24 @@ export async function getOrSetNonce(
 }
 export async function getNonce(
   legacyMetadataHost: string,
-  ecCurve: EC,
+  ecCurve: Curve,
   serverTimeOffset: number,
   X: string,
   Y: string,
-  privKey?: BN
+  privKey?: bigint
 ): Promise<GetOrSetNonceResult> {
   return getOrSetNonce(legacyMetadataHost, ecCurve, serverTimeOffset, X, Y, privKey, true);
 }
 
-export const decryptSeedData = async (seedBase64: string, finalUserKey: BN) => {
+export const decryptSeedData = async (seedBase64: string, finalUserKey: bigint) => {
   const decryptionKey = getSecpKeyFromEd25519(finalUserKey);
-  const seedUtf8 = Buffer.from(seedBase64, "base64").toString("utf-8");
+  const seedUtf8 = new TextDecoder().decode(base64ToBytes(seedBase64));
   const seedJson = JSON.parse(seedUtf8) as EncryptedSeed;
-  const bufferMetadata = { ...encParamsHexToBuf(seedJson.metadata), mode: "AES256" };
-  const bufferKey = decryptionKey.scalar.toArrayLike(Buffer, "be", 32);
-  const decText = await decrypt(bufferKey, {
-    ...bufferMetadata,
-    ciphertext: Buffer.from(seedJson.enc_text, "hex"),
+  const eciesMetadata = { ...encParamsHexToBuf(seedJson.metadata), mode: "AES256" };
+  const keyBytes = numberToBytesBE(decryptionKey.scalar, 32);
+  const decText = await decrypt(keyBytes, {
+    ...eciesMetadata,
+    ciphertext: hexToBytes(seedJson.enc_text),
   });
 
   return decText;
@@ -228,9 +244,9 @@ export async function getOrSetSapphireMetadataNonce(
   X: string,
   Y: string,
   serverTimeOffset?: number,
-  privKey?: BN
+  privKey?: bigint
 ): Promise<GetOrSetNonceResult> {
-  if (LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+  if (isLegacyNetwork(network)) {
     throw new Error("getOrSetSapphireMetadataNonce should only be used for sapphire networks");
   }
   let data: SapphireMetadataParams = {
@@ -240,17 +256,20 @@ export async function getOrSetSapphireMetadataNonce(
     set_data: { operation: "getOrSetNonce" },
   };
   if (privKey) {
-    const key = getKeyCurve(KEY_TYPE.SECP256K1).keyFromPrivate(privKey.toString("hex", 64), "hex");
-
     const setData = {
       operation: "getOrSetNonce",
-      timestamp: new BN(~~(serverTimeOffset + Date.now() / 1000)).toString(16),
+      timestamp: (~~(serverTimeOffset + Date.now() / 1000)).toString(16),
     };
-    const sig = key.sign(keccak256(Buffer.from(stringify(setData), "utf8")).slice(2));
+    const secp256k1 = getSecp256k1();
+    const msgHash = keccak256Bytes(utf8ToBytes(stringify(setData)));
+    const sig = secp256k1.sign(msgHash, numberToBytesBE(privKey, 32), { prehash: false });
+    const pubKey = derivePubKey(secp256k1, privKey);
     data = {
       ...data,
+      pub_key_X: bigintToHex(pubKey.x),
+      pub_key_Y: bigintToHex(pubKey.y),
       set_data: setData,
-      signature: Buffer.from(sig.r.toString(16, 64) + sig.s.toString(16, 64) + new BN("").toString(16, 2), "hex").toString("base64"),
+      signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
     };
   }
 

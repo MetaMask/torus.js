@@ -15,27 +15,23 @@ describe("setTssKey", () => {
     TORUS_NODE_MANAGER = new NodeDetailManager({ network: TORUS_SAPPHIRE_NETWORK.SAPPHIRE_DEVNET });
   });
 
-  it(
-    "should assign key to tss verifier id",
-    async () => {
-      const email = faker.internet.email();
-      const nonce = 0;
-      const tssTag = "default";
-      const tssVerifierId = `${email}\u0015${tssTag}\u0016${nonce}`;
-      const verifierDetails = { verifier: TORUS_TEST_VERIFIER, verifierId: email };
+  it("should assign key to tss verifier id", { timeout: 10000 }, async () => {
+    const email = faker.internet.email();
+    const nonce = 0;
+    const tssTag = "default";
+    const tssVerifierId = `${email}\u0015${tssTag}\u0016${nonce}`;
+    const verifierDetails = { verifier: TORUS_TEST_VERIFIER, verifierId: email };
 
-      const { torusNodeSSSEndpoints: torusNodeEndpoints } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
+    const { torusNodeSSSEndpoints: torusNodeEndpoints } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
 
-      const result = await GetOrSetTssDKGPubKey({
-        endpoints: torusNodeEndpoints,
-        verifier: TORUS_TEST_VERIFIER,
-        verifierId: email,
-        tssVerifierId,
-      });
-      expect(result.key.pubKeyX).not.toBeNull();
-    },
-    { timeout: 10000 }
-  );
+    const result = await GetOrSetTssDKGPubKey({
+      endpoints: torusNodeEndpoints,
+      verifier: TORUS_TEST_VERIFIER,
+      verifierId: email,
+      tssVerifierId,
+    });
+    expect(result.key.pubKeyX).not.toBeNull();
+  });
 
   it("should fetch pub address of tss verifier id", async () => {
     const email = TORUS_EXTENDED_VERIFIER_EMAIL;

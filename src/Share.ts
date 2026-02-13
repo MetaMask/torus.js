@@ -1,26 +1,25 @@
-import BN from "bn.js";
-
-import { BNString, StringifiedType } from "./interfaces";
+import { bigintToHex, toBigIntBE } from "./helpers/common";
+import { ShareJSON, StringifiedType } from "./interfaces";
 
 class Share {
-  share: BN;
+  share: bigint;
 
-  shareIndex: BN;
+  shareIndex: bigint;
 
-  constructor(shareIndex: BNString, share: BNString) {
-    this.share = new BN(share, "hex");
-    this.shareIndex = new BN(shareIndex, "hex");
+  constructor(shareIndex: bigint, share: bigint) {
+    this.share = share;
+    this.shareIndex = shareIndex;
   }
 
   static fromJSON(value: StringifiedType): Share {
-    const { share, shareIndex } = value;
-    return new Share(shareIndex as BNString, share as BNString);
+    const { share, shareIndex } = value as ShareJSON;
+    return new Share(toBigIntBE(shareIndex), toBigIntBE(share));
   }
 
-  toJSON(): StringifiedType {
+  toJSON(): ShareJSON {
     return {
-      share: this.share.toString("hex", 64),
-      shareIndex: this.shareIndex.toString("hex", 64),
+      share: bigintToHex(this.share),
+      shareIndex: bigintToHex(this.shareIndex),
     };
   }
 }

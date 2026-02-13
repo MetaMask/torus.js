@@ -2,11 +2,9 @@ import { faker } from "@faker-js/faker";
 import { TORUS_LEGACY_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
 import { fail } from "assert";
-import BN from "bn.js";
-import { useFakeTimers } from "sinon";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { keccak256, TorusPublicKey } from "../src";
+import { keccak256, TorusPublicKey, utf8ToBytes } from "../src";
 import TorusUtils from "../src/torus";
 import { generateIdToken, getRetrieveSharesParams } from "./helpers";
 
@@ -47,7 +45,7 @@ describe("torus utils migrated testnet on sapphire", () => {
       },
       metadata: {
         pubNonce: undefined,
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v1",
       },
@@ -82,7 +80,7 @@ describe("torus utils migrated testnet on sapphire", () => {
           X: "f3f7caefd6540d923c9993113f34226371bd6714a5be6882dedc95a6a929a8",
           Y: "f28620603601ce54fa0d70fd691fb72ff52f5bf164bf1a91617922eaad8cc7a5",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -117,7 +115,7 @@ describe("torus utils migrated testnet on sapphire", () => {
           X: "ad121b67fa550da814bbbd54ec7070705d058c941e04c03e07967b07b2f90345",
           Y: "bfe2395b177a72ebb836aaf24cedff2f14cd9ed49047990f5cdb99e4981b5753",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: false,
         typeOfUser: "v2",
       },
@@ -149,7 +147,7 @@ describe("torus utils migrated testnet on sapphire", () => {
           X: "4f86b0e69992d1551f1b16ceb0909453dbe17b9422b030ee6c5471c2e16b65d0",
           Y: "640384f3d39debb04c4e9fe5a5ec6a1b494b0ad66d00ac9be6f166f21d116ca4",
         },
-        nonce: new BN(0),
+        nonce: 0n,
         upgraded: true,
         typeOfUser: "v2",
       },
@@ -204,14 +202,14 @@ describe("torus utils migrated testnet on sapphire", () => {
         sessionTokenData: result.sessionData.sessionTokenData,
         sessionAuthKey: result.sessionData.sessionAuthKey,
       },
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });
 
   it("should be able to aggregate login", async () => {
     const idToken = generateIdToken(TORUS_TEST_EMAIL, "ES256");
-    const hashedIdToken = keccak256(Buffer.from(idToken, "utf8"));
+    const hashedIdToken = keccak256(utf8ToBytes(idToken));
     const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: TORUS_TEST_EMAIL };
     const { torusNodeEndpoints, torusIndexes, torusNodePub } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const result = await torus.retrieveShares(
@@ -256,7 +254,7 @@ describe("torus utils migrated testnet on sapphire", () => {
         sessionTokenData: result.sessionData.sessionTokenData,
         sessionAuthKey: result.sessionData.sessionAuthKey,
       },
-      metadata: { pubNonce: undefined, nonce: new BN(0), typeOfUser: "v1", upgraded: null },
+      metadata: { pubNonce: undefined, nonce: 0n, typeOfUser: "v1", upgraded: null },
       nodesData: result.nodesData,
     });
   });
@@ -280,16 +278,14 @@ describe("torus utils migrated testnet on sapphire", () => {
       );
       fail("should not reach here");
     } catch (err) {
+      // eslint-disable-next-line vitest/no-conditional-expect
       expect((err as { status: number }).status).toBe(403);
     }
   });
 
   it("should pass at get pub nonce when system time is incorrect", async () => {
-    const clock = useFakeTimers({ toFake: ["Date"] });
     const fakeTime = new Date("2023-05-05T12:00:00").getTime();
-
-    // Mock the system clock time to be a specific time
-    clock.tick(fakeTime);
+    vi.useFakeTimers({ now: fakeTime });
 
     // Now, getCurrentTime should return the mocked time
     const currentTime = new Date().getTime();
@@ -302,6 +298,6 @@ describe("torus utils migrated testnet on sapphire", () => {
     const { torusNodeSSSEndpoints: torusNodeEndpoints, torusNodePub } = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const response = await torus.getPublicAddress(torusNodeEndpoints, torusNodePub, verifierDetails);
     expect(response.metadata.typeOfUser).toBe("v1");
-    clock.restore();
+    vi.useRealTimers();
   });
 });

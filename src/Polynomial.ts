@@ -1,7 +1,6 @@
-import BN from "bn.js";
-import { ec as EC } from "elliptic";
+import { mod } from "@noble/curves/abstract/modular.js";
 
-import { BNString } from "./interfaces";
+import { bigintToHex, Curve } from "./helpers/common";
 import Share from "./Share";
 
 export type ShareMap = {
@@ -9,11 +8,11 @@ export type ShareMap = {
 };
 
 class Polynomial {
-  polynomial: BN[];
+  polynomial: bigint[];
 
-  ecCurve: EC;
+  ecCurve: Curve;
 
-  constructor(polynomial: BN[], ecCurve: EC) {
+  constructor(polynomial: bigint[], ecCurve: Curve) {
     this.polynomial = polynomial;
     this.ecCurve = ecCurve;
   }
@@ -22,38 +21,23 @@ class Polynomial {
     return this.polynomial.length;
   }
 
-  polyEval(x: BNString): BN {
-    const tmpX = new BN(x, "hex");
-    let xi = new BN(tmpX);
-    let sum = new BN(0);
-    sum = sum.add(this.polynomial[0]);
+  polyEval(x: bigint): bigint {
+    const n = this.ecCurve.Point.CURVE().n;
+    let xi = x;
+    let sum = this.polynomial[0];
     for (let i = 1; i < this.polynomial.length; i += 1) {
-      const tmp = xi.mul(this.polynomial[i]);
-      sum = sum.add(tmp);
-      sum = sum.umod(this.ecCurve.n);
-      xi = xi.mul(new BN(tmpX));
-      xi = xi.umod(this.ecCurve.n);
+      const tmp = xi * this.polynomial[i];
+      sum = mod(sum + tmp, n);
+      xi = mod(xi * x, n);
     }
     return sum;
   }
 
-  generateShares(shareIndexes: BNString[]): ShareMap {
-    const newShareIndexes = shareIndexes.map((index) => {
-      if (typeof index === "number") {
-        return new BN(index);
-      }
-      if (index instanceof BN) {
-        return index;
-      }
-      if (typeof index === "string") {
-        return new BN(index, "hex");
-      }
-      return index;
-    });
-
+  generateShares(shareIndexes: bigint[]): ShareMap {
     const shares: ShareMap = {};
-    for (let x = 0; x < newShareIndexes.length; x += 1) {
-      shares[newShareIndexes[x].toString("hex", 64)] = new Share(newShareIndexes[x], this.polyEval(newShareIndexes[x]));
+    for (let x = 0; x < shareIndexes.length; x += 1) {
+      const idx = shareIndexes[x];
+      shares[bigintToHex(idx)] = new Share(idx, this.polyEval(idx));
     }
     return shares;
   }

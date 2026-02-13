@@ -1,18 +1,11 @@
-import {
-  INodePub,
-  KEY_TYPE,
-  LEGACY_NETWORKS_ROUTE_MAP,
-  METADATA_MAP,
-  SIGNER_MAP,
-  TORUS_LEGACY_NETWORK_TYPE,
-  TORUS_NETWORK_TYPE,
-} from "@toruslabs/constants";
+import { INodePub, KEY_TYPE, METADATA_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
-import BN from "bn.js";
-import { curve, ec as EC } from "elliptic";
 
 import { config } from "./config";
 import {
+  bigintToHex,
+  bytesToHex,
+  Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
   generateShares,
@@ -22,9 +15,14 @@ import {
   getOrSetNonce,
   GetOrSetNonceError,
   GetPubKeyOrKeyAssign,
+  hexToBytes,
+  isLegacyNetwork,
+  isV2NonceResult,
   retrieveOrImportShare,
+  toBigIntBE,
 } from "./helpers";
 import {
+  AffinePoint,
   GetOrSetNonceResult,
   ImportKeyParams,
   KeyType,
@@ -33,7 +31,6 @@ import {
   TorusCtorOptions,
   TorusKey,
   TorusPublicKey,
-  v2NonceResultType,
 } from "./interfaces";
 import log from "./loglevel";
 
@@ -42,15 +39,13 @@ import log from "./loglevel";
 class Torus {
   private static sessionTime: number = 86400; // 86400 = 24 hour
 
-  public allowHost: string;
-
   public serverTimeOffset: number;
 
   public network: TORUS_NETWORK_TYPE;
 
   public clientId: string;
 
-  public ec: EC;
+  public ec: Curve;
 
   public enableOneKey: boolean;
 
@@ -58,28 +53,34 @@ class Torus {
 
   private keyType: KeyType = KEY_TYPE.SECP256K1;
 
+  private source?: string;
+
+  private authorizationServerUrl?: string;
+
   constructor({
     enableOneKey = false,
     clientId,
     network,
     serverTimeOffset = 0,
-    allowHost,
     legacyMetadataHost,
     keyType = KEY_TYPE.SECP256K1,
+    source,
+    authorizationServerUrl,
   }: TorusCtorOptions) {
     if (!clientId) throw new Error("Please provide a valid clientId in constructor");
     if (!network) throw new Error("Please provide a valid network in constructor");
-    if (keyType === KEY_TYPE.ED25519 && LEGACY_NETWORKS_ROUTE_MAP[network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (keyType === KEY_TYPE.ED25519 && isLegacyNetwork(network)) {
       throw new Error(`keyType: ${keyType} is not supported by ${network} network`);
     }
     this.keyType = keyType;
-    this.ec = new EC(this.keyType);
+    this.ec = getKeyCurve(this.keyType);
     this.serverTimeOffset = serverTimeOffset || 0; // ms
     this.network = network;
     this.clientId = clientId;
-    this.allowHost = allowHost || `${SIGNER_MAP[network]}/api/allow`;
     this.enableOneKey = enableOneKey;
-    this.legacyMetadataHost = legacyMetadataHost || METADATA_MAP[network as TORUS_LEGACY_NETWORK_TYPE];
+    this.legacyMetadataHost = legacyMetadataHost || (isLegacyNetwork(network) ? METADATA_MAP[network] : undefined);
+    this.source = source;
+    this.authorizationServerUrl = authorizationServerUrl;
   }
 
   static enableLogging(v = true): void {
@@ -129,7 +130,7 @@ class Torus {
     // for ed25519 keys import keys flows is the default
     let shouldUseDkg;
     if (typeof useDkg === "boolean") {
-      if (useDkg === false && LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
+      if (useDkg === false && isLegacyNetwork(this.network)) {
         throw new Error(`useDkg cannot be false for legacy network; ${this.network}`);
       }
       shouldUseDkg = this.keyType === KEY_TYPE.ED25519 ? false : useDkg;
@@ -152,7 +153,6 @@ class Torus {
       enableOneKey: this.enableOneKey,
       ecCurve: this.ec,
       keyType: this.keyType,
-      allowHost: this.allowHost,
       network: this.network,
       clientId: this.clientId,
       endpoints,
@@ -166,6 +166,8 @@ class Torus {
       nodePubkeys,
       extraParams,
       checkCommitment,
+      source: this.source,
+      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
@@ -192,7 +194,7 @@ class Torus {
       checkCommitment = true,
     } = params;
 
-    if (LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (isLegacyNetwork(this.network)) {
       throw new Error(`importPrivateKey is not supported by legacy network; ${this.network}`);
     }
     if (endpoints.length !== nodeIndexes.length) {
@@ -203,28 +205,27 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
-    let privKeyBuffer;
+    let privKeyBytes: Uint8Array;
 
     if (this.keyType === KEY_TYPE.SECP256K1) {
-      privKeyBuffer = Buffer.from(newPrivateKey.padStart(64, "0"), "hex");
-      if (privKeyBuffer.length !== 32) {
+      privKeyBytes = hexToBytes(newPrivateKey.padStart(64, "0"));
+      if (privKeyBytes.length !== 32) {
         throw new Error("Invalid private key length for given secp256k1 key");
       }
-    }
-    if (this.keyType === KEY_TYPE.ED25519) {
-      privKeyBuffer = Buffer.from(newPrivateKey.padStart(64, "0"), "hex");
-      if (privKeyBuffer.length !== 32) {
+    } else {
+      privKeyBytes = hexToBytes(newPrivateKey.padStart(64, "0"));
+      if (privKeyBytes.length !== 32) {
         throw new Error("Invalid private key length for given ed25519 key");
       }
     }
 
-    const sharesData = await generateShares(this.ec, this.keyType, this.serverTimeOffset, nodeIndexes, nodePubkeys, privKeyBuffer);
+    const sharesData = await generateShares(this.ec, this.keyType, this.serverTimeOffset, nodeIndexes, nodePubkeys, privKeyBytes);
     if (this.keyType === KEY_TYPE.ED25519) {
-      const ed25519Key = getEd25519ExtendedPublicKey(privKeyBuffer);
+      const ed25519Key = getEd25519ExtendedPublicKey(privKeyBytes);
       const ed25519PubKey = encodeEd25519Point(ed25519Key.point);
       const encodedPubKey = encodeEd25519Point(sharesData[0].final_user_point);
-      const importedPubKey = Buffer.from(ed25519PubKey).toString("hex");
-      const derivedPubKey = encodedPubKey.toString("hex");
+      const importedPubKey = bytesToHex(ed25519PubKey);
+      const derivedPubKey = bytesToHex(encodedPubKey);
       if (importedPubKey !== derivedPubKey) {
         throw new Error("invalid shares data for ed25519 key, public key is not matching after generating shares");
       }
@@ -236,7 +237,6 @@ class Torus {
       enableOneKey: this.enableOneKey,
       ecCurve: this.ec,
       keyType: this.keyType,
-      allowHost: this.allowHost,
       network: this.network,
       clientId: this.clientId,
       endpoints,
@@ -250,6 +250,8 @@ class Torus {
       nodePubkeys,
       extraParams,
       checkCommitment,
+      source: this.source,
+      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
@@ -261,7 +263,7 @@ class Torus {
     endpoints: string[],
     { verifier, verifierId, extendedVerifierId }: { verifier: string; verifierId: string; extendedVerifierId?: string }
   ): Promise<TorusPublicKey> {
-    return this.getNewPublicAddress(endpoints, { verifier, verifierId, extendedVerifierId }, true) as Promise<TorusPublicKey>;
+    return this.getNewPublicAddress(endpoints, { verifier, verifierId, extendedVerifierId }, true);
   }
 
   private async getNewPublicAddress(
@@ -272,7 +274,7 @@ class Torus {
     const localKeyType = keyType ?? this.keyType;
     const localEc = getKeyCurve(localKeyType);
 
-    if (localKeyType === KEY_TYPE.ED25519 && LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (localKeyType === KEY_TYPE.ED25519 && isLegacyNetwork(this.network)) {
       throw new Error(`keyType: ${keyType} is not supported by ${this.network} network`);
     }
 
@@ -302,19 +304,19 @@ class Torus {
     }
 
     // no need of nonce for extendedVerifierId (tss verifier id)
-    if (!nonceResult && !extendedVerifierId && !LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
+    if (!nonceResult && !extendedVerifierId && !isLegacyNetwork(this.network)) {
       throw new GetOrSetNonceError("metadata nonce is missing in share response");
     }
     const { pub_key_X: X, pub_key_Y: Y } = keyResult.keys[0];
     let pubNonce: { X: string; Y: string } | undefined;
-    const nonce = new BN(nonceResult?.nonce || "0", 16);
-    let oAuthPubKey: curve.base.BasePoint;
-    let finalPubKey: curve.base.BasePoint;
+    const nonce = toBigIntBE(nonceResult?.nonce || "0");
+    let oAuthPubKey: AffinePoint;
+    let finalPubKey: AffinePoint;
     if (extendedVerifierId) {
       // for tss key no need to add pub nonce
-      finalPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
+      finalPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
       oAuthPubKey = finalPubKey;
-    } else if (LEGACY_NETWORKS_ROUTE_MAP[this.network as TORUS_LEGACY_NETWORK_TYPE]) {
+    } else if (isLegacyNetwork(this.network)) {
       return this.formatLegacyPublicKeyData({
         isNewKey: keyResult.is_new_key,
         enableOneKey,
@@ -324,29 +326,30 @@ class Torus {
         serverTimeOffset: finalServerTimeOffset,
       });
     } else {
-      const v2NonceResult = nonceResult as v2NonceResultType;
-      oAuthPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
-      finalPubKey = localEc
-        .keyFromPublic({ x: X, y: Y })
-        .getPublic()
-        .add(localEc.keyFromPublic({ x: v2NonceResult.pubNonce.x, y: v2NonceResult.pubNonce.y }).getPublic());
+      if (!isV2NonceResult(nonceResult)) {
+        throw new Error("nonceResult must be a v2NonceResult");
+      }
+      oAuthPubKey = { x: toBigIntBE(X), y: toBigIntBE(Y) };
+      finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+        .add(localEc.Point.fromAffine({ x: toBigIntBE(nonceResult.pubNonce.x), y: toBigIntBE(nonceResult.pubNonce.y) }))
+        .toAffine();
 
-      pubNonce = { X: v2NonceResult.pubNonce.x, Y: v2NonceResult.pubNonce.y };
+      pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
     }
 
     if (!oAuthPubKey) {
       throw new Error("Unable to derive oAuthPubKey");
     }
-    const oAuthX = oAuthPubKey.getX().toString(16, 64);
-    const oAuthY = oAuthPubKey.getY().toString(16, 64);
-    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.getX(), oAuthPubKey.getY());
+    const oAuthX = bigintToHex(oAuthPubKey.x);
+    const oAuthY = bigintToHex(oAuthPubKey.y);
+    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.x, oAuthPubKey.y);
 
     if (!finalPubKey) {
       throw new Error("Unable to derive finalPubKey");
     }
-    const finalX = finalPubKey ? finalPubKey.getX().toString(16, 64) : "";
-    const finalY = finalPubKey ? finalPubKey.getY().toString(16, 64) : "";
-    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.getX(), finalPubKey.getY()) : "";
+    const finalX = finalPubKey ? bigintToHex(finalPubKey.x) : "";
+    const finalY = finalPubKey ? bigintToHex(finalPubKey.y) : "";
+    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.x, finalPubKey.y) : "";
     return {
       oAuthKeyData: {
         walletAddress: oAuthAddress,
@@ -361,7 +364,7 @@ class Torus {
       metadata: {
         pubNonce,
         nonce,
-        upgraded: (nonceResult as v2NonceResultType)?.upgraded || false,
+        upgraded: isV2NonceResult(nonceResult) ? nonceResult.upgraded : false,
         typeOfUser: "v2",
         serverTimeOffset: finalServerTimeOffset,
       },
@@ -384,33 +387,30 @@ class Torus {
 
     const { pub_key_X: X, pub_key_Y: Y } = finalKeyResult.keys[0];
     let nonceResult: GetOrSetNonceResult;
-    let nonce: BN;
-    let finalPubKey: curve.base.BasePoint;
+    let nonce: bigint;
+    let finalPubKey: AffinePoint;
     let typeOfUser: GetOrSetNonceResult["typeOfUser"];
     let pubNonce: { X: string; Y: string } | undefined;
 
-    const oAuthPubKey = localEc.keyFromPublic({ x: X, y: Y }).getPublic();
+    const oAuthPubKey: AffinePoint = { x: toBigIntBE(X), y: toBigIntBE(Y) };
 
     const finalServerTimeOffset = this.serverTimeOffset || serverTimeOffset;
     if (enableOneKey) {
       try {
         nonceResult = await getOrSetNonce(this.legacyMetadataHost, localEc, finalServerTimeOffset, X, Y, undefined, !isNewKey);
-        nonce = new BN(nonceResult.nonce || "0", 16);
+        nonce = toBigIntBE(nonceResult.nonce || "0");
         typeOfUser = nonceResult.typeOfUser;
       } catch {
         throw new GetOrSetNonceError();
       }
       if (nonceResult.typeOfUser === "v1") {
         nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-        finalPubKey = localEc
-          .keyFromPublic({ x: X, y: Y })
-          .getPublic()
-          .add(localEc.keyFromPrivate(nonce.toString(16, 64), "hex").getPublic());
+        const oAuthPoint = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) });
+        finalPubKey = nonce > 0n ? oAuthPoint.add(localEc.Point.BASE.multiply(nonce)).toAffine() : oAuthPoint.toAffine();
       } else if (nonceResult.typeOfUser === "v2") {
-        finalPubKey = localEc
-          .keyFromPublic({ x: X, y: Y })
-          .getPublic()
-          .add(localEc.keyFromPublic({ x: nonceResult.pubNonce.x, y: nonceResult.pubNonce.y }).getPublic());
+        finalPubKey = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) })
+          .add(localEc.Point.fromAffine({ x: toBigIntBE(nonceResult.pubNonce.x), y: toBigIntBE(nonceResult.pubNonce.y) }))
+          .toAffine();
         pubNonce = { X: nonceResult.pubNonce.x, Y: nonceResult.pubNonce.y };
       } else {
         throw new Error("getOrSetNonce should always return typeOfUser.");
@@ -418,25 +418,23 @@ class Torus {
     } else {
       typeOfUser = "v1";
       nonce = await getMetadata(this.legacyMetadataHost, { pub_key_X: X, pub_key_Y: Y });
-      finalPubKey = localEc
-        .keyFromPublic({ x: X, y: Y })
-        .getPublic()
-        .add(localEc.keyFromPrivate(nonce.toString(16, 64), "hex").getPublic());
+      const oAuthPoint = localEc.Point.fromAffine({ x: toBigIntBE(X), y: toBigIntBE(Y) });
+      finalPubKey = nonce > 0n ? oAuthPoint.add(localEc.Point.BASE.multiply(nonce)).toAffine() : oAuthPoint.toAffine();
     }
 
     if (!oAuthPubKey) {
       throw new Error("Unable to derive oAuthPubKey");
     }
-    const oAuthX = oAuthPubKey.getX().toString(16, 64);
-    const oAuthY = oAuthPubKey.getY().toString(16, 64);
-    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.getX(), oAuthPubKey.getY());
+    const oAuthX = bigintToHex(oAuthPubKey.x);
+    const oAuthY = bigintToHex(oAuthPubKey.y);
+    const oAuthAddress = generateAddressFromPubKey(localKeyType, oAuthPubKey.x, oAuthPubKey.y);
 
     if (typeOfUser === "v2" && !finalPubKey) {
       throw new Error("Unable to derive finalPubKey");
     }
-    const finalX = finalPubKey ? finalPubKey.getX().toString(16, 64) : "";
-    const finalY = finalPubKey ? finalPubKey.getY().toString(16, 64) : "";
-    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.getX(), finalPubKey.getY()) : "";
+    const finalX = finalPubKey ? bigintToHex(finalPubKey.x) : "";
+    const finalY = finalPubKey ? bigintToHex(finalPubKey.y) : "";
+    const finalAddress = finalPubKey ? generateAddressFromPubKey(localKeyType, finalPubKey.x, finalPubKey.y) : "";
     return {
       oAuthKeyData: {
         walletAddress: oAuthAddress,
@@ -451,7 +449,7 @@ class Torus {
       metadata: {
         pubNonce,
         nonce,
-        upgraded: (nonceResult as v2NonceResultType)?.upgraded || false,
+        upgraded: isV2NonceResult(nonceResult) ? nonceResult.upgraded : false,
         typeOfUser,
         serverTimeOffset: finalServerTimeOffset,
       },
