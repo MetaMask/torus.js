@@ -1,8 +1,8 @@
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { concatBytes, hexToBytes, numberToBytesBE } from "@noble/curves/utils.js";
 
-import { getSecp256k1, toBigIntBE } from "./helpers/common";
-import { BigIntString, KeyType } from "./interfaces";
+import { getSecp256k1 } from "./helpers/common";
+import { KeyType } from "./interfaces";
 
 class Point {
   x: bigint;
@@ -11,9 +11,9 @@ class Point {
 
   keyType: KeyType;
 
-  constructor(x: BigIntString, y: BigIntString, keyType: KeyType) {
-    this.x = toBigIntBE(x);
-    this.y = toBigIntBE(y);
+  constructor(x: bigint, y: bigint, keyType: KeyType) {
+    this.x = x;
+    this.y = y;
     this.keyType = keyType;
   }
 

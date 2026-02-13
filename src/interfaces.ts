@@ -224,8 +224,6 @@ export interface VerifierParams {
   extended_verifier_id?: string;
 }
 
-export type BigIntString = string | bigint;
-
 export type StringifiedType = Record<string, unknown>;
 
 /** JSON shape returned by Share.toJSON() */
