@@ -51,7 +51,7 @@ export interface TorusCtorOptions {
   serverTimeOffset?: number;
   legacyMetadataHost?: string;
   source?: string;
-  authorizationServerUrl?: string;
+  citadelServerUrl?: string;
 }
 
 export interface LegacyVerifierLookupResponse {
