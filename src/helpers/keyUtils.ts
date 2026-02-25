@@ -1,7 +1,7 @@
 import { mod } from "@noble/curves/abstract/modular.js";
-import { bs58 } from "@toruslabs/bs58";
 import { INodePub, KEY_TYPE } from "@toruslabs/constants";
 import { Ecies, encrypt } from "@toruslabs/eccrypto";
+import bs58 from "bs58";
 import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
 import { sha512 } from "ethereum-cryptography/sha512";
 import stringify from "json-stable-stringify";

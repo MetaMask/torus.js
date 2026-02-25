@@ -1,6 +1,6 @@
 import { INodePub, KEY_TYPE, SIGNER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
-import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
+import { generateJsonRPCObject, post } from "@toruslabs/http-helpers";
 
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
@@ -363,7 +363,7 @@ export async function retrieveOrImportShare(params: {
   newImportedShares?: ImportedShare[];
   checkCommitment?: boolean;
   source?: string;
-  authorizationServerUrl?: string;
+  citadelServerUrl?: string;
 }): Promise<TorusKey> {
   const {
     legacyMetadataHost,
@@ -385,37 +385,20 @@ export async function retrieveOrImportShare(params: {
     serverTimeOffset,
     checkCommitment = true,
     source,
-    authorizationServerUrl,
+    citadelServerUrl,
   } = params;
-  if (authorizationServerUrl) {
-    await post<void>(
-      authorizationServerUrl,
-      {
-        verifier,
-        verifier_id: verifierParams.verifier_id,
-        network,
-        client_id: clientId,
-        enable_gating: "true",
-        ...(source ? { source } : {}),
-      },
-      {},
-      { useAPIKey: true }
-    );
-  } else {
-    await get<void>(
-      `${SIGNER_MAP[network]}/api/allow`,
-      {
-        headers: {
-          verifier,
-          verifierid: verifierParams.verifier_id,
-          network,
-          clientid: clientId,
-          enablegating: "true",
-        },
-      },
-      { useAPIKey: true }
-    );
-  }
+
+  await post<void>(
+    citadelServerUrl || `${SIGNER_MAP[network]}/api/allow`,
+    {
+      verifier,
+      verifier_id: verifierParams.verifier_id,
+      network,
+      client_id: clientId,
+      source: source || "torus-utils-web",
+    },
+    {}
+  );
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();
