@@ -1,97 +1,68 @@
-import { invert, mod } from "@noble/curves/abstract/modular.js";
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { JRPCResponse } from "@toruslabs/constants";
+import { Ecies } from "@toruslabs/eccrypto";
 import {
+  base64ToBytes as mhBase64ToBytes,
+  bigintToHex,
+  bytesToBase64 as mhBytesToBase64,
   bytesToHex,
   bytesToNumberBE,
   bytesToNumberLE,
-  concatBytes,
+  calculateMedian,
+  Curve,
+  derivePubKey,
+  generatePrivateKey,
+  getEd25519,
+  getKeyCurve,
+  getSecp256k1,
   hexToBytes,
-  hexToNumber,
+  invert,
+  kCombinations,
+  keccak256,
+  keccak256Bytes,
+  mod,
+  nobleConcatBytes,
+  nobleHexToBytes,
   numberToBytesBE,
-  numberToHexUnpadded,
-} from "@noble/curves/utils.js";
-import { JRPCResponse, KEY_TYPE } from "@toruslabs/constants";
-import { Ecies } from "@toruslabs/eccrypto";
-import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
-import JsonStringify from "json-stable-stringify";
+  thresholdSame,
+  toBigIntBE,
+  utf8ToBytes,
+} from "@toruslabs/metadata-helpers";
 
-import { AffinePoint, CommitmentRequestResult, EciesHex, GetORSetKeyResponse, KeyType, VerifierLookupResponse } from "../interfaces";
+import { CommitmentRequestResult, EciesHex, GetORSetKeyResponse, VerifierLookupResponse } from "../interfaces";
 
-export type Curve = typeof secp256k1 | typeof ed25519;
-
-export function derivePubKey(ecCurve: Curve, sk: bigint): AffinePoint {
-  return ecCurve.Point.BASE.multiply(sk).toAffine();
-}
-
-// Re-export noble utilities for use across the codebase
-export { bytesToHex, bytesToNumberBE, bytesToNumberLE, concatBytes, hexToBytes, invert, mod, numberToBytesBE };
-
-// Convert a hex string or bigint to bigint. Wraps noble's hexToNumber with empty-string safety.
-export function toBigIntBE(val: string | bigint): bigint {
-  if (typeof val === "bigint") return val;
-  const cleaned = val.replace(/^0x/, "");
-  if (!cleaned) return 0n;
-  return hexToNumber(cleaned);
-}
-
-// Format a bigint as a zero-padded hex string. Wraps noble's numberToHexUnpadded with padding.
-export function bigintToHex(val: bigint, padLength = 64): string {
-  return numberToHexUnpadded(val).padStart(padLength, "0");
-}
-
-// Custom encoding helpers (not provided by @noble/curves)
-export function utf8ToBytes(str: string): Uint8Array {
-  return new TextEncoder().encode(str);
-}
-
-export function bytesToBase64(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes));
-}
-
-export function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/** Returns keccak256 hash as hex string (0x-prefixed). Use keccak256Bytes when you need bytes to avoid double conversion. */
-export function keccak256(a: Uint8Array): string {
-  const hash = bytesToHex(keccakHash(a));
-  return `0x${hash}`;
-}
-
-/** Returns keccak256 hash as raw bytes. Use instead of hexToBytes(keccak256(...)) to avoid double conversion. */
-export function keccak256Bytes(a: Uint8Array): Uint8Array {
-  return keccakHash(a);
-}
-
-/** Generate a random private key. Prefer passing ecCurve when you already have it (better for tree-shaking). */
-export function generatePrivateKey(keyType: KeyType): Uint8Array;
-export function generatePrivateKey(ecCurve: Curve): Uint8Array;
-export function generatePrivateKey(ecCurveOrKeyType: Curve | KeyType): Uint8Array {
-  const ec = typeof ecCurveOrKeyType === "string" ? getKeyCurve(ecCurveOrKeyType) : ecCurveOrKeyType;
-  return ec.utils.randomSecretKey();
-}
-
-export const getSecp256k1 = () => secp256k1;
-export const getEd25519 = () => ed25519;
-
-export const getKeyCurve = (keyType: KeyType): Curve => {
-  if (keyType === KEY_TYPE.SECP256K1) {
-    return getSecp256k1();
-  } else if (keyType === KEY_TYPE.ED25519) {
-    return getEd25519();
-  }
-  throw new Error(`Invalid keyType: ${keyType}`);
+// Re-export everything from metadata-helpers that consumers of common.ts expect
+export {
+  bigintToHex,
+  bytesToHex,
+  bytesToNumberBE,
+  bytesToNumberLE,
+  calculateMedian,
+  derivePubKey,
+  generatePrivateKey,
+  getEd25519,
+  getKeyCurve,
+  getSecp256k1,
+  hexToBytes,
+  invert,
+  kCombinations,
+  keccak256,
+  keccak256Bytes,
+  mod,
+  numberToBytesBE,
+  thresholdSame,
+  toBigIntBE,
+  utf8ToBytes,
 };
-// this function normalizes the result from nodes before passing the result to threshold check function
-// For ex: some fields returns by nodes might be different from each other
-// like created_at field might vary and nonce_data might not be returned by all nodes because
-// of the metadata implementation in sapphire.
+export type { Curve };
+
+export const bytesToBase64 = mhBytesToBase64;
+export const base64ToBytes = mhBase64ToBytes;
+export const concatBytes = nobleConcatBytes;
+
+// ---------------------------------------------------------------------------
+// Torus-specific helpers (NOT migrated to metadata-helpers)
+// ---------------------------------------------------------------------------
+
 export const normalizeKeysResult = (result: GetORSetKeyResponse) => {
   const finalResult: Pick<GetORSetKeyResponse, "keys" | "is_new_key"> = {
     keys: [],
@@ -127,49 +98,7 @@ export const normalizeLookUpResult = (result: VerifierLookupResponse) => {
   return finalResult;
 };
 
-export const kCombinations = (s: number | number[], k: number): number[][] => {
-  let set = s;
-  if (typeof set === "number") {
-    set = Array.from({ length: set }, (_, i) => i);
-  }
-  if (k > set.length || k <= 0) {
-    return [];
-  }
-
-  if (k === set.length) {
-    return [set];
-  }
-
-  if (k === 1) {
-    return set.reduce((acc, cur) => [...acc, [cur]], [] as number[][]);
-  }
-
-  const combs: number[][] = [];
-  let tailCombs: number[][] = [];
-
-  for (let i = 0; i <= set.length - k + 1; i += 1) {
-    tailCombs = kCombinations(set.slice(i + 1), k - 1);
-    for (let j = 0; j < tailCombs.length; j += 1) {
-      combs.push([set[i], ...tailCombs[j]]);
-    }
-  }
-
-  return combs;
-};
-
-export const thresholdSame = <T>(arr: T[], t: number): T | undefined => {
-  const hashMap: Record<string, number> = {};
-  for (let i = 0; i < arr.length; i += 1) {
-    const str = JsonStringify(arr[i]);
-    hashMap[str] = hashMap[str] ? hashMap[str] + 1 : 1;
-    if (hashMap[str] === t) {
-      return arr[i];
-    }
-  }
-  return undefined;
-};
-
-/** ECIES params: bytes → hex. \@toruslabs/eccrypto v7 does not export these; we keep them local. */
+/** ECIES params: bytes → hex. */
 export function encParamsBufToHex(encParams: Ecies): EciesHex {
   return {
     iv: bytesToHex(encParams.iv),
@@ -180,45 +109,24 @@ export function encParamsBufToHex(encParams: Ecies): EciesHex {
   };
 }
 
-/** ECIES params: hex → bytes. \@toruslabs/eccrypto v7 does not export these; we keep them local. */
+/** ECIES params: hex → bytes. */
 export function encParamsHexToBuf(eciesData: Omit<EciesHex, "ciphertext">): Omit<Ecies, "ciphertext"> {
   return {
-    ephemPublicKey: hexToBytes(eciesData.ephemPublicKey),
-    iv: hexToBytes(eciesData.iv),
-    mac: hexToBytes(eciesData.mac),
+    ephemPublicKey: nobleHexToBytes(eciesData.ephemPublicKey),
+    iv: nobleHexToBytes(eciesData.iv),
+    mac: nobleHexToBytes(eciesData.mac),
   };
 }
 
 export function getProxyCoordinatorEndpointIndex(endpoints: string[], verifier: string, verifierId: string) {
   const verifierIdStr = `${verifier}${verifierId}`;
-  const hashedVerifierId = keccak256(utf8ToBytes(verifierIdStr)).slice(2);
+  const hashedVerifierId = keccak256HexString(utf8ToBytes(verifierIdStr)).slice(2);
   const proxyEndpointNum = Number(BigInt(`0x${hashedVerifierId}`) % BigInt(endpoints.length));
   return proxyEndpointNum;
 }
 
-export function calculateMedian(arr: number[]): number {
-  const arrSize = arr.length;
-
-  if (arrSize === 0) return 0;
-  const sortedArr = arr.sort(function (a, b) {
-    return a - b;
-  });
-
-  // odd length
-  if (arrSize % 2 !== 0) {
-    return sortedArr[Math.floor(arrSize / 2)];
-  }
-
-  // return average of two mid values in case of even arrSize
-  const mid1 = sortedArr[arrSize / 2 - 1];
-
-  const mid2 = sortedArr[arrSize / 2];
-  return (mid1 + mid2) / 2;
-}
-
 export function waitFor(milliseconds: number) {
   return new Promise((resolve, reject) => {
-    // hack to bypass eslint warning.
     if (milliseconds > 0) {
       setTimeout(resolve, milliseconds);
     } else {
@@ -228,18 +136,9 @@ export function waitFor(milliseconds: number) {
 }
 
 export function retryCommitment(executionPromise: () => Promise<JRPCResponse<CommitmentRequestResult>>, maxRetries: number) {
-  // Notice that we declare an inner function here
-  // so we can encapsulate the retries and don't expose
-  // it to the caller. This is also a recursive function
   async function retryWithBackoff(retries: number) {
     try {
-      // we don't wait on the first attempt
       if (retries > 0) {
-        // on every retry, we exponentially increase the time to wait.
-        // Here is how it looks for a `maxRetries` = 4
-        // (2 ** 1) * 100 = 200 ms
-        // (2 ** 2) * 100 = 400 ms
-        // (2 ** 3) * 100 = 800 ms
         const timeToWait = 2 ** retries * 100;
         await waitFor(timeToWait);
       }
@@ -248,22 +147,18 @@ export function retryCommitment(executionPromise: () => Promise<JRPCResponse<Com
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       const acceptedErrorMsgs = [
-        // Slow node
         "Timed out",
         "Failed to fetch",
         "fetch failed",
         "Load failed",
         "cancelled",
         "NetworkError when attempting to fetch resource.",
-        // Happens when the node is not reachable (dns issue etc)
-        "TypeError: Failed to fetch", // All except iOS and Firefox
-        "TypeError: cancelled", // iOS
-        "TypeError: NetworkError when attempting to fetch resource.", // Firefox
+        "TypeError: Failed to fetch",
+        "TypeError: cancelled",
+        "TypeError: NetworkError when attempting to fetch resource.",
       ];
 
       if (retries < maxRetries && (acceptedErrorMsgs.includes(errorMsg) || (errorMsg && errorMsg.includes("reason: getaddrinfo EAI_AGAIN")))) {
-        // only retry if we didn't reach the limit
-        // otherwise, let the caller handle the error
         return retryWithBackoff(retries + 1);
       }
       throw e;
