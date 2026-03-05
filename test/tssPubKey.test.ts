@@ -15,7 +15,7 @@ describe("setTssKey", () => {
     TORUS_NODE_MANAGER = new NodeDetailManager({ network: TORUS_SAPPHIRE_NETWORK.SAPPHIRE_DEVNET });
   });
 
-  it("should assign key to tss verifier id", { timeout: 10000 }, async () => {
+  it("should assign key to tss verifier id", { timeout: 15000 }, async () => {
     const email = faker.internet.email();
     const nonce = 0;
     const tssTag = "default";

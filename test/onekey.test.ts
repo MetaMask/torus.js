@@ -160,7 +160,7 @@ describe("torus onekey", () => {
     });
   });
 
-  it("should be able to key assign", async () => {
+  it("should be able to key assign", { timeout: 15000 }, async () => {
     const verifier = TORUS_TEST_VERIFIER;
     const email = faker.internet.email();
     const verifierDetails = { verifier, verifierId: email };
