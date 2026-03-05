@@ -1,3 +1,4 @@
+import { concatBytes as nobleConcatBytes, hexToBytes as nobleHexToBytes } from "@noble/curves/utils.js";
 import { JRPCResponse } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
 import {
@@ -20,8 +21,6 @@ import {
   keccak256,
   keccak256Bytes,
   mod,
-  nobleConcatBytes,
-  nobleHexToBytes,
   numberToBytesBE,
   thresholdSame,
   toBigIntBE,
