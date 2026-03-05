@@ -281,7 +281,7 @@ describe("torus utils sapphire devnet", () => {
     expect(result.metadata.upgraded).toBe(false);
   });
 
-  it("should keep public address same", { timeout: 15000 }, async () => {
+  it("should keep public address same", async () => {
     const verifierDetails = { verifier: TORUS_TEST_VERIFIER, verifierId: faker.internet.email() };
     const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
     const torusNodeEndpoints = nodeDetails.torusNodeSSSEndpoints;
@@ -635,7 +635,7 @@ describe("torus utils sapphire devnet", () => {
     });
   });
 
-  it("should assign key to tss verifier id", { timeout: 15000 }, async () => {
+  it("should assign key to tss verifier id", async () => {
     const email = faker.internet.email();
     const nonce = 0;
     const tssTag = "default";
@@ -843,7 +843,7 @@ describe("torus utils sapphire devnet", () => {
     expect(result.metadata.upgraded).toBe(false);
   });
 
-  it("should be able to login with different accounts and get different addresses for each", { timeout: 15000 }, async () => {
+  it("should be able to login with different accounts and get different addresses for each", async () => {
     const email1 = faker.internet.email();
     const email2 = faker.internet.email();
 
@@ -942,48 +942,44 @@ describe("torus utils sapphire devnet", () => {
     expect(set.size).toBe(1);
   });
 
-  it(
-    "should be able to login with a fixed set of different accounts repeatedly and get a constant set of addresses",
-    { timeout: 60000 },
-    async () => {
-      const addresses = [];
-      const iterations = 5;
-      for (let i = 0; i <= iterations; i++) {
-        const email = faker.internet.email();
-        for (let k = 0; k <= iterations; k++) {
-          const idToken = generateIdToken(email, "ES256");
-          const hashedIdToken = keccak256(utf8ToBytes(idToken));
-          const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: email };
+  it("should be able to login with a fixed set of different accounts repeatedly and get a constant set of addresses", async () => {
+    const addresses = [];
+    const iterations = 5;
+    for (let i = 0; i <= iterations; i++) {
+      const email = faker.internet.email();
+      for (let k = 0; k <= iterations; k++) {
+        const idToken = generateIdToken(email, "ES256");
+        const hashedIdToken = keccak256(utf8ToBytes(idToken));
+        const verifierDetails = { verifier: TORUS_TEST_AGGREGATE_VERIFIER, verifierId: email };
 
-          const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
-          const torusNodeEndpoints = nodeDetails.torusNodeSSSEndpoints;
-          const result = await torus.retrieveShares({
-            endpoints: torusNodeEndpoints,
-            indexes: nodeDetails.torusIndexes,
-            verifier: TORUS_TEST_AGGREGATE_VERIFIER,
-            verifierParams: {
-              verify_params: [{ verifier_id: email, idtoken: idToken }],
-              sub_verifier_ids: [TORUS_TEST_VERIFIER],
-              verifier_id: email,
-            },
-            idToken: hashedIdToken.substring(2),
-            nodePubkeys: nodeDetails.torusNodePub,
-          });
-          expect(result.metadata.serverTimeOffset).toBeLessThan(20);
-          delete result.metadata.serverTimeOffset;
+        const nodeDetails = await TORUS_NODE_MANAGER.getNodeDetails(verifierDetails);
+        const torusNodeEndpoints = nodeDetails.torusNodeSSSEndpoints;
+        const result = await torus.retrieveShares({
+          endpoints: torusNodeEndpoints,
+          indexes: nodeDetails.torusIndexes,
+          verifier: TORUS_TEST_AGGREGATE_VERIFIER,
+          verifierParams: {
+            verify_params: [{ verifier_id: email, idtoken: idToken }],
+            sub_verifier_ids: [TORUS_TEST_VERIFIER],
+            verifier_id: email,
+          },
+          idToken: hashedIdToken.substring(2),
+          nodePubkeys: nodeDetails.torusNodePub,
+        });
+        expect(result.metadata.serverTimeOffset).toBeLessThan(20);
+        delete result.metadata.serverTimeOffset;
 
-          expect(result.finalKeyData.walletAddress).not.toBe(null);
-          expect(result.finalKeyData.walletAddress).not.toBe("");
-          expect(result.oAuthKeyData.walletAddress).not.toBe(null);
-          expect(result.metadata.typeOfUser).toBe("v2");
-          expect(result.metadata.nonce).not.toBe(null);
-          expect(result.metadata.upgraded).toBe(false);
+        expect(result.finalKeyData.walletAddress).not.toBe(null);
+        expect(result.finalKeyData.walletAddress).not.toBe("");
+        expect(result.oAuthKeyData.walletAddress).not.toBe(null);
+        expect(result.metadata.typeOfUser).toBe("v2");
+        expect(result.metadata.nonce).not.toBe(null);
+        expect(result.metadata.upgraded).toBe(false);
 
-          addresses.push(result.finalKeyData.walletAddress);
-        }
+        addresses.push(result.finalKeyData.walletAddress);
       }
-      const set = new Set(addresses);
-      expect(set.size).toBe(6);
     }
-  );
+    const set = new Set(addresses);
+    expect(set.size).toBe(6);
+  });
 });
