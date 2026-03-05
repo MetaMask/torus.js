@@ -1,5 +1,3 @@
-import { mod } from "@noble/curves/abstract/modular.js";
-import { hexToBytes } from "@noble/curves/utils.js";
 import { INodePub, KEY_TYPE } from "@toruslabs/constants";
 import { Ecies, encrypt } from "@toruslabs/eccrypto";
 import {
@@ -20,8 +18,10 @@ import {
   getSecp256k1,
   getSecp256k1PublicKeyFromAffinePoint,
   getSecpKeyFromEd25519,
+  hexToBytes,
   keccak256,
   KeyType,
+  mod,
   toBigIntBE,
   utf8ToBytes,
 } from "@toruslabs/metadata-helpers";

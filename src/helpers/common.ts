@@ -1,4 +1,3 @@
-import { bytesToHex as nobleBytesToHex, concatBytes as nobleConcatBytes, hexToBytes as nobleHexToBytes } from "@noble/curves/utils.js";
 import { JRPCResponse } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
 import {
@@ -9,6 +8,7 @@ import {
   bytesToNumberBE,
   bytesToNumberLE,
   calculateMedian,
+  concatBytes,
   Curve,
   derivePubKey,
   generatePrivateKey,
@@ -36,6 +36,7 @@ export {
   bytesToNumberBE,
   bytesToNumberLE,
   calculateMedian,
+  concatBytes,
   derivePubKey,
   generatePrivateKey,
   getEd25519,
@@ -56,11 +57,6 @@ export type { Curve };
 
 export const bytesToBase64 = mhBytesToBase64;
 export const base64ToBytes = mhBase64ToBytes;
-export const concatBytes = nobleConcatBytes;
-
-// ---------------------------------------------------------------------------
-// Torus-specific helpers (NOT migrated to metadata-helpers)
-// ---------------------------------------------------------------------------
 
 export const normalizeKeysResult = (result: GetORSetKeyResponse) => {
   const finalResult: Pick<GetORSetKeyResponse, "keys" | "is_new_key"> = {
@@ -97,13 +93,12 @@ export const normalizeLookUpResult = (result: VerifierLookupResponse) => {
   return finalResult;
 };
 
-/** ECIES params: bytes → hex. Uses noble bytesToHex so round-trip with encParamsHexToBuf (noble hexToBytes) is consistent. */
 export function encParamsBufToHex(encParams: Ecies): EciesHex {
   return {
-    iv: nobleBytesToHex(encParams.iv),
-    ephemPublicKey: nobleBytesToHex(encParams.ephemPublicKey),
-    ciphertext: nobleBytesToHex(encParams.ciphertext),
-    mac: nobleBytesToHex(encParams.mac),
+    iv: bytesToHex(encParams.iv),
+    ephemPublicKey: bytesToHex(encParams.ephemPublicKey),
+    ciphertext: bytesToHex(encParams.ciphertext),
+    mac: bytesToHex(encParams.mac),
     mode: "AES256",
   };
 }
@@ -111,9 +106,9 @@ export function encParamsBufToHex(encParams: Ecies): EciesHex {
 /** ECIES params: hex → bytes. */
 export function encParamsHexToBuf(eciesData: Omit<EciesHex, "ciphertext">): Omit<Ecies, "ciphertext"> {
   return {
-    ephemPublicKey: nobleHexToBytes(eciesData.ephemPublicKey),
-    iv: nobleHexToBytes(eciesData.iv),
-    mac: nobleHexToBytes(eciesData.mac),
+    ephemPublicKey: hexToBytes(eciesData.ephemPublicKey),
+    iv: hexToBytes(eciesData.iv),
+    mac: hexToBytes(eciesData.mac),
   };
 }
 
