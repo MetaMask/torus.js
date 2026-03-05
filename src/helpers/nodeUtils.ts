@@ -1,6 +1,7 @@
 import { INodePub, KEY_TYPE, SIGNER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
 import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
+import { lagrangeInterpolation } from "@toruslabs/metadata-helpers";
 
 import { config } from "../config";
 import { JRPC_METHODS } from "../constants";
@@ -49,7 +50,6 @@ import {
   utf8ToBytes,
 } from "./common";
 import { generateAddressFromPrivKey, generateAddressFromPubKey, generateShares, isV2NonceResult } from "./keyUtils";
-import { lagrangeInterpolation } from "./langrangeInterpolatePoly";
 import {
   decryptNodeData,
   decryptNodeDataWithPadding,

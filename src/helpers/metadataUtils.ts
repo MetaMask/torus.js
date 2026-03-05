@@ -1,14 +1,12 @@
-import { mod } from "@noble/curves/abstract/modular.js";
 import { KEY_TYPE, TORUS_NETWORK_TYPE, TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { decrypt } from "@toruslabs/eccrypto";
 import { Data, post } from "@toruslabs/http-helpers";
-import { keccak256 as keccakHash } from "ethereum-cryptography/keccak";
+import { getSecpKeyFromEd25519 } from "@toruslabs/metadata-helpers";
 import stringify from "json-stable-stringify";
 import log from "loglevel";
 
 import { SAPPHIRE_DEVNET_METADATA_URL, SAPPHIRE_METADATA_URL } from "../constants";
 import {
-  AffinePoint,
   EciesHex,
   EncryptedSeed,
   GetOrSetNonceResult,
@@ -22,7 +20,6 @@ import {
   base64ToBytes,
   bigintToHex,
   bytesToBase64,
-  bytesToNumberBE,
   concatBytes,
   Curve,
   derivePubKey,
@@ -36,24 +33,7 @@ import {
 } from "./common";
 import { isLegacyNetwork } from "./networkUtils";
 
-export const getSecpKeyFromEd25519 = (
-  ed25519Scalar: bigint
-): {
-  scalar: bigint;
-  point: AffinePoint;
-} => {
-  const secp256k1 = getSecp256k1();
-  const N = secp256k1.Point.CURVE().n;
-
-  const keyHash = keccakHash(numberToBytesBE(ed25519Scalar, 32));
-  const secpScalar = mod(bytesToNumberBE(keyHash), N);
-  const point = derivePubKey(secp256k1, secpScalar);
-
-  return {
-    scalar: secpScalar,
-    point,
-  };
-};
+export { getSecpKeyFromEd25519 };
 
 export function convertMetadataToNonce(params: { message?: string }): bigint {
   if (!params || !params.message) {

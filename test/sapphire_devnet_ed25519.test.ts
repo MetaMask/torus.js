@@ -1,5 +1,5 @@
 import { faker } from "@faker-js/faker";
-import { bs58 as base58 } from "@toruslabs/bs58";
+import { base58 } from "@scure/base";
 import { TORUS_SAPPHIRE_NETWORK } from "@toruslabs/constants";
 import { NodeDetailManager } from "@toruslabs/fetch-node-details";
 import { beforeEach, describe, expect, it } from "vitest";
