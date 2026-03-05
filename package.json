@@ -25,7 +25,6 @@
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",
-    "@toruslabs/bs58": "^1.0.0",
     "@toruslabs/constants": "^16.0.0",
     "@toruslabs/eccrypto": "^7.0.0",
     "@toruslabs/http-helpers": "^9.0.0",
@@ -38,6 +37,7 @@
     "@babel/register": "^7.28.6",
     "@babel/runtime": "^7.28.6",
     "@faker-js/faker": "^10.3.0",
+    "@scure/base": "^2.0.0",
     "@toruslabs/config": "^4.0.0",
     "@toruslabs/eslint-config-typescript": "^5.0.1",
     "@toruslabs/fetch-node-details": "^16.0.0",
