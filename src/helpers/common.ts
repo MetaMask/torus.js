@@ -1,4 +1,4 @@
-import { concatBytes as nobleConcatBytes, hexToBytes as nobleHexToBytes } from "@noble/curves/utils.js";
+import { bytesToHex as nobleBytesToHex, concatBytes as nobleConcatBytes, hexToBytes as nobleHexToBytes } from "@noble/curves/utils.js";
 import { JRPCResponse } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
 import {
@@ -97,13 +97,13 @@ export const normalizeLookUpResult = (result: VerifierLookupResponse) => {
   return finalResult;
 };
 
-/** ECIES params: bytes → hex. */
+/** ECIES params: bytes → hex. Uses noble bytesToHex so round-trip with encParamsHexToBuf (noble hexToBytes) is consistent. */
 export function encParamsBufToHex(encParams: Ecies): EciesHex {
   return {
-    iv: bytesToHex(encParams.iv),
-    ephemPublicKey: bytesToHex(encParams.ephemPublicKey),
-    ciphertext: bytesToHex(encParams.ciphertext),
-    mac: bytesToHex(encParams.mac),
+    iv: nobleBytesToHex(encParams.iv),
+    ephemPublicKey: nobleBytesToHex(encParams.ephemPublicKey),
+    ciphertext: nobleBytesToHex(encParams.ciphertext),
+    mac: nobleBytesToHex(encParams.mac),
     mode: "AES256",
   };
 }
