@@ -20,7 +20,7 @@ import {
   getSecp256k1,
   getSecp256k1PublicKeyFromAffinePoint,
   getSecpKeyFromEd25519,
-  keccak256HexString,
+  keccak256,
   KeyType,
   toBigIntBE,
   utf8ToBytes,
@@ -52,7 +52,7 @@ export function stripHexPrefix(str: string): string {
 
 export function toChecksumAddress(hexAddress: string): string {
   const address = stripHexPrefix(hexAddress).toLowerCase();
-  const hash = keccak256HexString(utf8ToBytes(address), { prefixed: false });
+  const hash = keccak256(utf8ToBytes(address), { prefixed: false });
   let ret = "0x";
 
   for (let i = 0; i < address.length; i++) {

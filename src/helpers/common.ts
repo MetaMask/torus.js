@@ -120,7 +120,7 @@ export function encParamsHexToBuf(eciesData: Omit<EciesHex, "ciphertext">): Omit
 
 export function getProxyCoordinatorEndpointIndex(endpoints: string[], verifier: string, verifierId: string) {
   const verifierIdStr = `${verifier}${verifierId}`;
-  const hashedVerifierId = keccak256HexString(utf8ToBytes(verifierIdStr)).slice(2);
+  const hashedVerifierId = keccak256(utf8ToBytes(verifierIdStr), { prefixed: false });
   const proxyEndpointNum = Number(BigInt(`0x${hashedVerifierId}`) % BigInt(endpoints.length));
   return proxyEndpointNum;
 }
