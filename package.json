@@ -24,7 +24,6 @@
     "@babel/runtime": "7.x"
   },
   "dependencies": {
-    "@noble/curves": "^2.0.1",
     "@toruslabs/constants": "^16.0.0",
     "@toruslabs/eccrypto": "^7.0.0",
     "@toruslabs/http-helpers": "^9.0.0",

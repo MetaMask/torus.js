@@ -1,10 +1,9 @@
-import type { AffinePoint as AffinePointCurve } from "@noble/curves/abstract/curve.js";
 import type { INodePub, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
+import { AffinePoint } from "@toruslabs/metadata-helpers";
 
 import { TorusUtilsExtraParams } from "./TorusUtilsExtraParams";
-
-export type AffinePoint = AffinePointCurve<bigint>;
+export type { AffinePoint };
 
 export interface KeyIndex {
   index: string;

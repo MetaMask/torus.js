@@ -83,7 +83,7 @@ export function generateMetadataParams(ecCurve: Curve, serverTimeOffset: number,
     pub_key_X: pubKey.x.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     pub_key_Y: pubKey.y.toString(16), // DO NOT PAD THIS. BACKEND DOESN'T
     set_data: setData,
-    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
+    signature: bytesToBase64(concatBytes([sig, hexToBytes("00")])),
   };
 }
 
@@ -137,7 +137,7 @@ export function generateNonceMetadataParams(
     pub_key_Y: bigintToHex(pubKey.y),
     set_data: setData,
     key_type: keyType,
-    signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
+    signature: bytesToBase64(concatBytes([sig, hexToBytes("00")])),
   };
 }
 
@@ -249,7 +249,7 @@ export async function getOrSetSapphireMetadataNonce(
       pub_key_X: bigintToHex(pubKey.x),
       pub_key_Y: bigintToHex(pubKey.y),
       set_data: setData,
-      signature: bytesToBase64(concatBytes(sig, hexToBytes("00"))),
+      signature: bytesToBase64(concatBytes([sig, hexToBytes("00")])),
     };
   }
 
