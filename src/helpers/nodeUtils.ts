@@ -1,4 +1,4 @@
-import { INodePub, KEY_TYPE, SIGNER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP, INodePub, KEY_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
 import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
 import { lagrangeInterpolation } from "@toruslabs/metadata-helpers";
@@ -350,6 +350,7 @@ export async function retrieveOrImportShare(params: {
   ecCurve: Curve;
   keyType: KeyType;
   network: TORUS_NETWORK_TYPE;
+  buildEnv: BUILD_ENV_TYPE;
   clientId: string;
   endpoints: string[];
   indexes: number[];
@@ -371,6 +372,7 @@ export async function retrieveOrImportShare(params: {
     ecCurve,
     keyType,
     network,
+    buildEnv,
     clientId,
     endpoints,
     nodePubkeys,
@@ -403,7 +405,7 @@ export async function retrieveOrImportShare(params: {
     );
   } else {
     await get<void>(
-      `${SIGNER_MAP[network]}/api/allow`,
+      `${CITADEL_SERVER_MAP[buildEnv]}/api/allow`,
       {
         headers: {
           verifier,

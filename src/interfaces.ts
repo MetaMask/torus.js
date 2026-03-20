@@ -1,4 +1,4 @@
-import type { INodePub, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import type { BUILD_ENV_TYPE, INodePub, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { Ecies } from "@toruslabs/eccrypto";
 import { AffinePoint } from "@toruslabs/metadata-helpers";
 
@@ -45,6 +45,7 @@ export interface NonceMetadataParams {
 export interface TorusCtorOptions {
   clientId: string;
   network: TORUS_NETWORK_TYPE;
+  buildEnv?: BUILD_ENV_TYPE;
   keyType?: KeyType;
   enableOneKey?: boolean;
   serverTimeOffset?: number;
