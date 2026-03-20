@@ -1,4 +1,4 @@
-import { INodePub, KEY_TYPE, SIGNER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP, INodePub, KEY_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
 import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
 import { lagrangeInterpolation } from "@toruslabs/metadata-helpers";
@@ -350,6 +350,7 @@ export async function retrieveOrImportShare(params: {
   ecCurve: Curve;
   keyType: KeyType;
   network: TORUS_NETWORK_TYPE;
+  buildEnv: BUILD_ENV_TYPE;
   clientId: string;
   endpoints: string[];
   indexes: number[];
@@ -363,7 +364,6 @@ export async function retrieveOrImportShare(params: {
   newImportedShares?: ImportedShare[];
   checkCommitment?: boolean;
   source?: string;
-  authorizationServerUrl?: string;
 }): Promise<TorusKey> {
   const {
     legacyMetadataHost,
@@ -371,6 +371,7 @@ export async function retrieveOrImportShare(params: {
     ecCurve,
     keyType,
     network,
+    buildEnv,
     clientId,
     endpoints,
     nodePubkeys,
@@ -385,37 +386,16 @@ export async function retrieveOrImportShare(params: {
     serverTimeOffset,
     checkCommitment = true,
     source,
-    authorizationServerUrl,
   } = params;
-  if (authorizationServerUrl) {
-    await post<void>(
-      authorizationServerUrl,
-      {
-        verifier,
-        verifier_id: verifierParams.verifier_id,
-        network,
-        client_id: clientId,
-        enable_gating: "true",
-        ...(source ? { source } : {}),
-      },
-      {},
-      { useAPIKey: true }
-    );
-  } else {
-    await get<void>(
-      `${SIGNER_MAP[network]}/api/allow`,
-      {
-        headers: {
-          verifier,
-          verifierid: verifierParams.verifier_id,
-          network,
-          clientid: clientId,
-          enablegating: "true",
-        },
-      },
-      { useAPIKey: true }
-    );
+  const url = new URL(`${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`);
+  url.searchParams.set("verifier", verifier);
+  url.searchParams.set("verifierid", verifierParams.verifier_id);
+  url.searchParams.set("network", network);
+  url.searchParams.set("clientid", clientId);
+  if (source) {
+    url.searchParams.set("source", source);
   }
+  await get<void>(url.toString());
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();

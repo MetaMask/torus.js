@@ -1,4 +1,4 @@
-import { INodePub, KEY_TYPE, METADATA_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { BUILD_ENV, BUILD_ENV_TYPE, INodePub, KEY_TYPE, LEGACY_METADATA_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
 
 import { config } from "./config";
@@ -43,6 +43,8 @@ class Torus {
 
   public network: TORUS_NETWORK_TYPE;
 
+  public buildEnv: BUILD_ENV_TYPE;
+
   public clientId: string;
 
   public ec: Curve;
@@ -55,17 +57,15 @@ class Torus {
 
   private source?: string;
 
-  private authorizationServerUrl?: string;
-
   constructor({
     enableOneKey = false,
     clientId,
     network,
+    buildEnv = BUILD_ENV.PRODUCTION,
     serverTimeOffset = 0,
     legacyMetadataHost,
     keyType = KEY_TYPE.SECP256K1,
     source,
-    authorizationServerUrl,
   }: TorusCtorOptions) {
     if (!clientId) throw new Error("Please provide a valid clientId in constructor");
     if (!network) throw new Error("Please provide a valid network in constructor");
@@ -76,11 +76,11 @@ class Torus {
     this.ec = getKeyCurve(this.keyType);
     this.serverTimeOffset = serverTimeOffset || 0; // ms
     this.network = network;
+    this.buildEnv = buildEnv;
     this.clientId = clientId;
     this.enableOneKey = enableOneKey;
-    this.legacyMetadataHost = legacyMetadataHost || (isLegacyNetwork(network) ? METADATA_MAP[network] : undefined);
+    this.legacyMetadataHost = legacyMetadataHost || (isLegacyNetwork(network) ? LEGACY_METADATA_MAP[buildEnv] : undefined);
     this.source = source;
-    this.authorizationServerUrl = authorizationServerUrl;
   }
 
   static enableLogging(v = true): void {
@@ -155,6 +155,7 @@ class Torus {
       keyType: this.keyType,
       network: this.network,
       clientId: this.clientId,
+      buildEnv: this.buildEnv,
       endpoints,
       indexes,
       verifier,
@@ -167,7 +168,6 @@ class Torus {
       extraParams,
       checkCommitment,
       source: this.source,
-      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
@@ -239,6 +239,7 @@ class Torus {
       keyType: this.keyType,
       network: this.network,
       clientId: this.clientId,
+      buildEnv: this.buildEnv,
       endpoints,
       indexes: nodeIndexes,
       verifier,
@@ -251,7 +252,6 @@ class Torus {
       extraParams,
       checkCommitment,
       source: this.source,
-      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
