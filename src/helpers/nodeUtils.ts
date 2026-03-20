@@ -387,20 +387,15 @@ export async function retrieveOrImportShare(params: {
     checkCommitment = true,
     source,
   } = params;
-  await get<void>(
-    `${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`,
-    {
-      headers: {
-        verifier,
-        verifierid: verifierParams.verifier_id,
-        network,
-        clientid: clientId,
-        enablegating: "true",
-        ...(source ? { source } : {}),
-      },
+  await get<void>(`${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`, {
+    headers: {
+      verifier,
+      verifierid: verifierParams.verifier_id,
+      network,
+      clientid: clientId,
+      ...(source ? { source } : {}),
     },
-    { useAPIKey: true }
-  );
+  });
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();
