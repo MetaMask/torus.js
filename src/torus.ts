@@ -57,8 +57,6 @@ class Torus {
 
   private source?: string;
 
-  private authorizationServerUrl?: string;
-
   constructor({
     enableOneKey = false,
     clientId,
@@ -68,7 +66,6 @@ class Torus {
     legacyMetadataHost,
     keyType = KEY_TYPE.SECP256K1,
     source,
-    authorizationServerUrl,
   }: TorusCtorOptions) {
     if (!clientId) throw new Error("Please provide a valid clientId in constructor");
     if (!network) throw new Error("Please provide a valid network in constructor");
@@ -84,7 +81,6 @@ class Torus {
     this.enableOneKey = enableOneKey;
     this.legacyMetadataHost = legacyMetadataHost || (isLegacyNetwork(network) ? LEGACY_METADATA_MAP[buildEnv] : undefined);
     this.source = source;
-    this.authorizationServerUrl = authorizationServerUrl;
   }
 
   static enableLogging(v = true): void {
@@ -172,7 +168,6 @@ class Torus {
       extraParams,
       checkCommitment,
       source: this.source,
-      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 
@@ -257,7 +252,6 @@ class Torus {
       extraParams,
       checkCommitment,
       source: this.source,
-      authorizationServerUrl: this.authorizationServerUrl,
     });
   }
 

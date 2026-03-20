@@ -364,7 +364,6 @@ export async function retrieveOrImportShare(params: {
   newImportedShares?: ImportedShare[];
   checkCommitment?: boolean;
   source?: string;
-  authorizationServerUrl?: string;
 }): Promise<TorusKey> {
   const {
     legacyMetadataHost,
@@ -387,37 +386,21 @@ export async function retrieveOrImportShare(params: {
     serverTimeOffset,
     checkCommitment = true,
     source,
-    authorizationServerUrl,
   } = params;
-  if (authorizationServerUrl) {
-    await post<void>(
-      authorizationServerUrl,
-      {
+  await get<void>(
+    `${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`,
+    {
+      headers: {
         verifier,
-        verifier_id: verifierParams.verifier_id,
+        verifierid: verifierParams.verifier_id,
         network,
-        client_id: clientId,
-        enable_gating: "true",
+        clientid: clientId,
+        enablegating: "true",
         ...(source ? { source } : {}),
       },
-      {},
-      { useAPIKey: true }
-    );
-  } else {
-    await get<void>(
-      `${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`,
-      {
-        headers: {
-          verifier,
-          verifierid: verifierParams.verifier_id,
-          network,
-          clientid: clientId,
-          enablegating: "true",
-        },
-      },
-      { useAPIKey: true }
-    );
-  }
+    },
+    { useAPIKey: true }
+  );
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();
