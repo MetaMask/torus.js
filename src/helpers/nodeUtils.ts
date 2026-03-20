@@ -405,7 +405,7 @@ export async function retrieveOrImportShare(params: {
     );
   } else {
     await get<void>(
-      `${CITADEL_SERVER_MAP[buildEnv]}/api/allow`,
+      `${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`,
       {
         headers: {
           verifier,
