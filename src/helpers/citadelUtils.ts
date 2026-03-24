@@ -29,9 +29,5 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
 }
 
 export async function callAllowApi(params: CitadelAllowParams): Promise<void> {
-  try {
-    await get<void>(buildAllowUrl(params));
-  } catch {
-    return;
-  }
+  await get<void>(buildAllowUrl(params));
 }

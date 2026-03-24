@@ -389,7 +389,7 @@ export async function retrieveOrImportShare(params: {
     checkCommitment = true,
     source,
   } = params;
-  callAllowApi({
+  await callAllowApi({
     buildEnv,
     verifier,
     verifierId: verifierParams.verifier_id,

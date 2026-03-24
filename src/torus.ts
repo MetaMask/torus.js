@@ -6,6 +6,7 @@ import {
   bigintToHex,
   bytesToHex,
   callAllowApi,
+  CitadelAllowParams,
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
@@ -183,12 +184,20 @@ class Torus {
         source: this.source,
       });
     } catch (error) {
-      callAllowApi({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED });
+      this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED });
       throw error;
     }
 
-    callAllowApi({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS });
+    this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS });
     return result;
+  }
+
+  async reportSignerAllow(params: CitadelAllowParams): Promise<void> {
+    try {
+      await callAllowApi(params);
+    } catch (error) {
+      log.error("Failed to log allow api", error);
+    }
   }
 
   async getPublicAddress(
