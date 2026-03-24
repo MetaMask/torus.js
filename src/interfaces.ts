@@ -25,6 +25,12 @@ export type v1NonceResultType = { typeOfUser: "v1"; nonce?: string; seed?: strin
 export type GetOrSetNonceResult = v2NonceResultType | v1NonceResultType;
 export type KeyType = "secp256k1" | "ed25519";
 
+export enum LoginStatus {
+  INITIATED = "initiated",
+  SUCCESS = "success",
+  FAILED = "failed",
+}
+
 export interface SetNonceData {
   operation: string;
   data: string;

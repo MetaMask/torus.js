@@ -5,6 +5,7 @@ import { config } from "./config";
 import {
   bigintToHex,
   bytesToHex,
+  callAllowApi,
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
@@ -27,6 +28,7 @@ import {
   ImportKeyParams,
   KeyType,
   LegacyVerifierLookupResponse,
+  LoginStatus,
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
@@ -147,28 +149,46 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
-    return retrieveOrImportShare({
-      legacyMetadataHost: this.legacyMetadataHost,
-      serverTimeOffset: this.serverTimeOffset,
-      enableOneKey: this.enableOneKey,
-      ecCurve: this.ec,
-      keyType: this.keyType,
+    const allowParams = {
+      buildEnv: this.buildEnv,
+      verifier,
+      verifierId: verifierParams.verifier_id,
       network: this.network,
       clientId: this.clientId,
-      buildEnv: this.buildEnv,
-      endpoints,
-      indexes,
-      verifier,
-      verifierParams,
-      idToken,
-      useDkg: shouldUseDkg,
-      newImportedShares: [],
-      overrideExistingKey: false,
-      nodePubkeys,
-      extraParams,
-      checkCommitment,
       source: this.source,
-    });
+    };
+
+    let result: TorusKey;
+    try {
+      result = await retrieveOrImportShare({
+        legacyMetadataHost: this.legacyMetadataHost,
+        serverTimeOffset: this.serverTimeOffset,
+        enableOneKey: this.enableOneKey,
+        ecCurve: this.ec,
+        keyType: this.keyType,
+        network: this.network,
+        clientId: this.clientId,
+        buildEnv: this.buildEnv,
+        endpoints,
+        indexes,
+        verifier,
+        verifierParams,
+        idToken,
+        useDkg: shouldUseDkg,
+        newImportedShares: [],
+        overrideExistingKey: false,
+        nodePubkeys,
+        extraParams,
+        checkCommitment,
+        source: this.source,
+      });
+    } catch (error) {
+      callAllowApi({ ...allowParams, loginStatus: LoginStatus.FAILED });
+      throw error;
+    }
+
+    callAllowApi({ ...allowParams, loginStatus: LoginStatus.SUCCESS });
+    return result;
   }
 
   async getPublicAddress(

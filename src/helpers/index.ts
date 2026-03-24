@@ -1,3 +1,4 @@
+export * from "./citadelUtils";
 export * from "./common";
 export * from "./errorUtils";
 export * from "./keyUtils";
