@@ -1,7 +1,7 @@
 import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP } from "@toruslabs/constants";
 import { get } from "@toruslabs/http-helpers";
 
-import { LoginStatus } from "../interfaces";
+import { TorusLoginStatus } from "../interfaces";
 
 export interface CitadelAllowParams {
   buildEnv: BUILD_ENV_TYPE;
@@ -10,7 +10,7 @@ export interface CitadelAllowParams {
   network: string;
   clientId: string;
   source?: string;
-  loginStatus?: LoginStatus;
+  torusLoginStatus?: TorusLoginStatus;
 }
 
 export function buildAllowUrl(params: CitadelAllowParams): string {
@@ -22,8 +22,8 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
   if (params.source) {
     url.searchParams.set("source", params.source);
   }
-  if (params.loginStatus) {
-    url.searchParams.set("loginstatus", params.loginStatus);
+  if (params.torusLoginStatus) {
+    url.searchParams.set("torusloginstatus", params.torusLoginStatus);
   }
   return url.toString();
 }

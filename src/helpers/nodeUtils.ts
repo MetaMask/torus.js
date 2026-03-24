@@ -16,10 +16,10 @@ import {
   JRPCResponse,
   KeyLookupResult,
   KeyType,
-  LoginStatus,
   SessionToken,
   ShareRequestResult,
   TorusKey,
+  TorusLoginStatus,
   UserType,
   VerifierLookupResponse,
   VerifierLookupResult,
@@ -389,7 +389,15 @@ export async function retrieveOrImportShare(params: {
     checkCommitment = true,
     source,
   } = params;
-  callAllowApi({ buildEnv, verifier, verifierId: verifierParams.verifier_id, network, clientId, source, loginStatus: LoginStatus.INITIATED });
+  callAllowApi({
+    buildEnv,
+    verifier,
+    verifierId: verifierParams.verifier_id,
+    network,
+    clientId,
+    source,
+    torusLoginStatus: TorusLoginStatus.INITIATED,
+  });
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();

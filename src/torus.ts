@@ -28,10 +28,10 @@ import {
   ImportKeyParams,
   KeyType,
   LegacyVerifierLookupResponse,
-  LoginStatus,
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
+  TorusLoginStatus,
   TorusPublicKey,
 } from "./interfaces";
 import log from "./loglevel";
@@ -183,11 +183,11 @@ class Torus {
         source: this.source,
       });
     } catch (error) {
-      callAllowApi({ ...allowParams, loginStatus: LoginStatus.FAILED });
+      callAllowApi({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED });
       throw error;
     }
 
-    callAllowApi({ ...allowParams, loginStatus: LoginStatus.SUCCESS });
+    callAllowApi({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS });
     return result;
   }
 
