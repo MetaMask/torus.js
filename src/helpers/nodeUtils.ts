@@ -1,6 +1,6 @@
-import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP, INodePub, KEY_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { BUILD_ENV_TYPE, INodePub, KEY_TYPE, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
 import { generatePrivate, getPublic } from "@toruslabs/eccrypto";
-import { generateJsonRPCObject, get, post } from "@toruslabs/http-helpers";
+import { generateJsonRPCObject, post } from "@toruslabs/http-helpers";
 import { lagrangeInterpolation } from "@toruslabs/metadata-helpers";
 
 import { config } from "../config";
@@ -19,6 +19,7 @@ import {
   SessionToken,
   ShareRequestResult,
   TorusKey,
+  TorusLoginStatus,
   UserType,
   VerifierLookupResponse,
   VerifierLookupResult,
@@ -27,6 +28,7 @@ import {
 import log from "../loglevel";
 import { Some } from "../some";
 import { TorusUtilsExtraParams } from "../TorusUtilsExtraParams";
+import { callAllowApi } from "./citadelUtils";
 import {
   base64ToBytes,
   bigintToHex,
@@ -387,15 +389,15 @@ export async function retrieveOrImportShare(params: {
     checkCommitment = true,
     source,
   } = params;
-  const url = new URL(`${CITADEL_SERVER_MAP[buildEnv]}/v1/signer/allow`);
-  url.searchParams.set("verifier", verifier);
-  url.searchParams.set("verifierid", verifierParams.verifier_id);
-  url.searchParams.set("network", network);
-  url.searchParams.set("clientid", clientId);
-  if (source) {
-    url.searchParams.set("source", source);
-  }
-  await get<void>(url.toString());
+  await callAllowApi({
+    buildEnv,
+    verifier,
+    verifierId: verifierParams.verifier_id,
+    network,
+    clientId,
+    source,
+    torusLoginStatus: TorusLoginStatus.INITIATED,
+  });
 
   // generate temporary private and public key that is used to secure receive shares
   const sessionAuthKey = generatePrivate();

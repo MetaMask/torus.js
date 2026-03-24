@@ -5,6 +5,8 @@ import { config } from "./config";
 import {
   bigintToHex,
   bytesToHex,
+  callAllowApi,
+  CitadelAllowParams,
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
@@ -30,6 +32,7 @@ import {
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
+  TorusLoginStatus,
   TorusPublicKey,
 } from "./interfaces";
 import log from "./loglevel";
@@ -147,28 +150,54 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
-    return retrieveOrImportShare({
-      legacyMetadataHost: this.legacyMetadataHost,
-      serverTimeOffset: this.serverTimeOffset,
-      enableOneKey: this.enableOneKey,
-      ecCurve: this.ec,
-      keyType: this.keyType,
+    const allowParams = {
+      buildEnv: this.buildEnv,
+      verifier,
+      verifierId: verifierParams.verifier_id,
       network: this.network,
       clientId: this.clientId,
-      buildEnv: this.buildEnv,
-      endpoints,
-      indexes,
-      verifier,
-      verifierParams,
-      idToken,
-      useDkg: shouldUseDkg,
-      newImportedShares: [],
-      overrideExistingKey: false,
-      nodePubkeys,
-      extraParams,
-      checkCommitment,
       source: this.source,
-    });
+    };
+
+    let result: TorusKey;
+    try {
+      result = await retrieveOrImportShare({
+        legacyMetadataHost: this.legacyMetadataHost,
+        serverTimeOffset: this.serverTimeOffset,
+        enableOneKey: this.enableOneKey,
+        ecCurve: this.ec,
+        keyType: this.keyType,
+        network: this.network,
+        clientId: this.clientId,
+        buildEnv: this.buildEnv,
+        endpoints,
+        indexes,
+        verifier,
+        verifierParams,
+        idToken,
+        useDkg: shouldUseDkg,
+        newImportedShares: [],
+        overrideExistingKey: false,
+        nodePubkeys,
+        extraParams,
+        checkCommitment,
+        source: this.source,
+      });
+    } catch (error) {
+      this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED });
+      throw error;
+    }
+
+    this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS });
+    return result;
+  }
+
+  async reportSignerAllow(params: CitadelAllowParams): Promise<void> {
+    try {
+      await callAllowApi(params);
+    } catch (error) {
+      log.error("Failed to log allow api", error);
+    }
   }
 
   async getPublicAddress(
