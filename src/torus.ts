@@ -33,7 +33,6 @@ import {
   RetrieveSharesParams,
   TorusCtorOptions,
   TorusKey,
-  TorusLoginStatus,
   TorusPublicKey,
 } from "./interfaces";
 import log from "./loglevel";
@@ -187,11 +186,11 @@ class Torus {
         source: this.source,
       });
     } catch (error) {
-      this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED, torusLoginFailed: true });
+      this.reportSignerAllow({ ...allowParams, torusLoginFailed: true });
       throw error;
     }
 
-    this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS, torusLoginSuccess: true });
+    this.reportSignerAllow({ ...allowParams, torusLoginSuccess: true });
     return result;
   }
 

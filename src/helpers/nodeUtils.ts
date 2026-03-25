@@ -19,7 +19,6 @@ import {
   SessionToken,
   ShareRequestResult,
   TorusKey,
-  TorusLoginStatus,
   UserType,
   VerifierLookupResponse,
   VerifierLookupResult,
@@ -398,7 +397,6 @@ export async function retrieveOrImportShare(params: {
     network,
     clientId,
     source,
-    torusLoginStatus: TorusLoginStatus.INITIATED,
     recordId,
     torusLoginInitiated: true,
   });
