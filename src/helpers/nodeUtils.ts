@@ -19,7 +19,6 @@ import {
   SessionToken,
   ShareRequestResult,
   TorusKey,
-  TorusLoginStatus,
   UserType,
   VerifierLookupResponse,
   VerifierLookupResult,
@@ -363,6 +362,7 @@ export async function retrieveOrImportShare(params: {
   overrideExistingKey: boolean;
   nodePubkeys: INodePub[];
   extraParams: TorusUtilsExtraParams;
+  recordId: string;
   newImportedShares?: ImportedShare[];
   checkCommitment?: boolean;
   source?: string;
@@ -388,6 +388,7 @@ export async function retrieveOrImportShare(params: {
     serverTimeOffset,
     checkCommitment = true,
     source,
+    recordId,
   } = params;
   await callAllowApi({
     buildEnv,
@@ -396,7 +397,8 @@ export async function retrieveOrImportShare(params: {
     network,
     clientId,
     source,
-    torusLoginStatus: TorusLoginStatus.INITIATED,
+    recordId,
+    torusLoginInitiated: true,
   });
 
   // generate temporary private and public key that is used to secure receive shares
