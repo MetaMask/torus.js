@@ -10,6 +10,7 @@ import {
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
+  generateRecordId,
   generateShares,
   getEd25519ExtendedPublicKey,
   getKeyCurve,
@@ -157,11 +158,13 @@ class Torus {
       network: this.network,
       clientId: this.clientId,
       source: this.source,
+      recordId: generateRecordId(),
     };
 
     let result: TorusKey;
     try {
       result = await retrieveOrImportShare({
+        recordId: allowParams.recordId,
         legacyMetadataHost: this.legacyMetadataHost,
         serverTimeOffset: this.serverTimeOffset,
         enableOneKey: this.enableOneKey,
@@ -184,11 +187,11 @@ class Torus {
         source: this.source,
       });
     } catch (error) {
-      this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED });
+      this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.FAILED, torusLoginFailed: true });
       throw error;
     }
 
-    this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS });
+    this.reportSignerAllow({ ...allowParams, torusLoginStatus: TorusLoginStatus.SUCCESS, torusLoginSuccess: true });
     return result;
   }
 
@@ -261,6 +264,7 @@ class Torus {
     }
 
     return retrieveOrImportShare({
+      recordId: generateRecordId(),
       legacyMetadataHost: this.legacyMetadataHost,
       serverTimeOffset: this.serverTimeOffset,
       enableOneKey: this.enableOneKey,
