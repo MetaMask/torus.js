@@ -29,7 +29,7 @@ export interface CitadelAuditParams extends CitadelAuthFlowAuditParams {
   authConnection: string;
   authConnectionId: string;
   groupedAuthConnectionId: string;
-  userId: string;
+  oauthUserId: string;
   web3AuthNetwork: string;
   web3AuthClientId: string;
 }
@@ -68,7 +68,7 @@ export function buildAuditPayload(
     authConnection: params.authConnection || "",
     authConnectionId: params.verifierParams.sub_verifier_ids?.[0] || "",
     groupedAuthConnectionId: params.verifier || "",
-    userId: params.verifierParams.verifier_id || "",
+    oauthUserId: params.verifierParams.verifier_id || "",
     web3AuthNetwork: network,
     web3AuthClientId: clientId,
   };
