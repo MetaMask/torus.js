@@ -199,13 +199,13 @@ class Torus {
       // report oauth verified, we won't await this call as it's only for analytics tracking
       this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true });
     } catch (error) {
-      this.reportSignerAllow({ ...allowParams, torusLoginFailed: true });
+      this.reportSignerAllow(allowParams);
       // report oauth verification failed, we won't await this call as it's only for analytics tracking
       this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
       throw error;
     }
 
-    this.reportSignerAllow({ ...allowParams, torusLoginSuccess: true });
+    this.reportSignerAllow(allowParams);
     return result;
   }
 

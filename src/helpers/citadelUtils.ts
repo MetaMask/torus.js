@@ -11,9 +11,6 @@ export interface CitadelAllowParams {
   clientId: string;
   recordId: string;
   source?: string;
-  torusLoginInitiated?: boolean;
-  torusLoginSuccess?: boolean;
-  torusLoginFailed?: boolean;
 }
 
 export interface CitadelAuthFlowAuditParams {
@@ -29,7 +26,7 @@ export interface CitadelAuditParams extends CitadelAuthFlowAuditParams {
   authConnection: string;
   authConnectionId: string;
   groupedAuthConnectionId: string;
-  oauthUserId: string;
+  oAuthUserId: string;
   web3AuthNetwork: string;
   web3AuthClientId: string;
 }
@@ -43,15 +40,6 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
   url.searchParams.set("clientid", params.clientId);
   if (params.source) {
     url.searchParams.set("source", params.source);
-  }
-  if (typeof params.torusLoginInitiated !== "undefined") {
-    url.searchParams.set("toruslogininitiated", params.torusLoginInitiated.toString());
-  }
-  if (typeof params.torusLoginSuccess !== "undefined") {
-    url.searchParams.set("torusloginsuccess", params.torusLoginSuccess.toString());
-  }
-  if (typeof params.torusLoginFailed !== "undefined") {
-    url.searchParams.set("torusloginfailed", params.torusLoginFailed.toString());
   }
   return url.toString();
 }
@@ -68,7 +56,7 @@ export function buildAuditPayload(
     authConnection: params.authConnection || "",
     authConnectionId: params.verifierParams.sub_verifier_ids?.[0] || "",
     groupedAuthConnectionId: params.verifier || "",
-    oauthUserId: params.verifierParams.verifier_id || "",
+    oAuthUserId: params.verifierParams.verifier_id || "",
     web3AuthNetwork: network,
     web3AuthClientId: clientId,
   };

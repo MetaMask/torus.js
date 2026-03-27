@@ -398,7 +398,6 @@ export async function retrieveOrImportShare(params: {
     clientId,
     source,
     recordId,
-    torusLoginInitiated: true,
   });
 
   // generate temporary private and public key that is used to secure receive shares
