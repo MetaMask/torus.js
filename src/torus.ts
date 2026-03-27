@@ -167,7 +167,7 @@ class Torus {
 
     let result: TorusKey;
 
-    // report oauth completed
+    // report oauth completed, we won't await this call as it's only for analytics tracking
     // if recordId isn't provided in the params, we will also report oauth initiated
     this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthCompleted: true, ...(params.recordId ? {} : { oauthInitiated: true }) });
 
@@ -196,11 +196,11 @@ class Torus {
         source: this.source,
       });
 
-      // report oauth verified
-      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true, ...(params.recordId ? {} : { oauthInitiated: true }) });
+      // report oauth verified, we won't await this call as it's only for analytics tracking
+      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true });
     } catch (error) {
       this.reportSignerAllow({ ...allowParams, torusLoginFailed: true });
-      // report oauth verification failed
+      // report oauth verification failed, we won't await this call as it's only for analytics tracking
       this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
       throw error;
     }
