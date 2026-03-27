@@ -4,9 +4,12 @@ import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
 import { config } from "./config";
 import {
   bigintToHex,
+  buildAuditPayload,
   bytesToHex,
   callAllowApi,
+  callAuditApi,
   CitadelAllowParams,
+  CitadelAuthFlowAuditParams,
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
@@ -150,6 +153,8 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
+    const recordId = params.recordId || generateRecordId();
+
     const allowParams = {
       buildEnv: this.buildEnv,
       verifier,
@@ -157,10 +162,15 @@ class Torus {
       network: this.network,
       clientId: this.clientId,
       source: this.source,
-      recordId: generateRecordId(),
+      recordId,
     };
 
     let result: TorusKey;
+
+    // report oauth completed
+    // if recordId isn't provided in the params, we will also report oauth initiated
+    this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthCompleted: true, ...(params.recordId ? {} : { oauthInitiated: true }) });
+
     try {
       result = await retrieveOrImportShare({
         recordId: allowParams.recordId,
@@ -185,8 +195,13 @@ class Torus {
         checkCommitment,
         source: this.source,
       });
+
+      // report oauth verified
+      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true, ...(params.recordId ? {} : { oauthInitiated: true }) });
     } catch (error) {
       this.reportSignerAllow({ ...allowParams, torusLoginFailed: true });
+      // report oauth verification failed
+      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
       throw error;
     }
 
@@ -199,6 +214,21 @@ class Torus {
       await callAllowApi(params);
     } catch (error) {
       log.error("Failed to log allow api", error);
+    }
+  }
+
+  /**
+   * Report user auth flow audit to the citadel server.
+   * @param recordId - The record id to be used for the analytics tracking.
+   * @param params - The parameters for the retrieve shares operation.
+   * @param authStepStatus - The status of the authentication steps.
+   */
+  async reportUserAuthFlowAudit(params: RetrieveSharesParams, authFlowAuditParams: CitadelAuthFlowAuditParams): Promise<void> {
+    try {
+      const auditParams = buildAuditPayload(this.network, this.clientId, params, authFlowAuditParams);
+      await callAuditApi(this.buildEnv, auditParams);
+    } catch (error) {
+      log.error("Failed to log user auth flow audit", error);
     }
   }
 
@@ -262,8 +292,10 @@ class Torus {
       }
     }
 
+    const recordId = params.recordId || generateRecordId();
+
     return retrieveOrImportShare({
-      recordId: generateRecordId(),
+      recordId,
       legacyMetadataHost: this.legacyMetadataHost,
       serverTimeOffset: this.serverTimeOffset,
       enableOneKey: this.enableOneKey,
