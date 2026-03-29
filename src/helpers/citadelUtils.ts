@@ -50,6 +50,10 @@ export function buildAuditPayload(
   params: RetrieveSharesParams,
   authFlowAuditParams: CitadelAuthFlowAuditParams
 ): CitadelAuditParams {
+  if (!params.recordId) {
+    params.recordId = generateRecordId();
+  }
+
   return {
     ...authFlowAuditParams,
     recordId: params.recordId,
