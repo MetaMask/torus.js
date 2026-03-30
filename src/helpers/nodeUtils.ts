@@ -390,6 +390,7 @@ export async function retrieveOrImportShare(params: {
     source,
     recordId,
   } = params;
+  // call feature-gating check before share retrieval
   await callAllowApi({
     buildEnv,
     verifier,

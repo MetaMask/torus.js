@@ -3,7 +3,15 @@ import { get, put } from "@toruslabs/http-helpers";
 
 import { RetrieveSharesParams } from "../interfaces";
 
-export interface CitadelAllowParams {
+export interface CitadelAuthFlowAuditParams {
+  oauthInitiated?: boolean;
+  oauthVerified?: boolean;
+  oauthCompleted?: boolean;
+  oauthVerificationFailed?: boolean;
+  oauthFailed?: boolean;
+}
+
+export interface CitadelAllowParams extends CitadelAuthFlowAuditParams {
   buildEnv: BUILD_ENV_TYPE;
   verifier: string;
   verifierId: string;
@@ -11,14 +19,6 @@ export interface CitadelAllowParams {
   clientId: string;
   recordId: string;
   source?: string;
-}
-
-export interface CitadelAuthFlowAuditParams {
-  oauthInitiated?: boolean;
-  oauthVerified?: boolean;
-  oauthCompleted?: boolean;
-  oauthVerificationFailed?: boolean;
-  oauthFailed?: boolean;
 }
 
 export interface CitadelAuditParams extends CitadelAuthFlowAuditParams {
@@ -40,6 +40,21 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
   url.searchParams.set("clientid", params.clientId);
   if (params.source) {
     url.searchParams.set("source", params.source);
+  }
+  if (params.oauthInitiated) {
+    url.searchParams.set("oauthinitiated", params.oauthInitiated.toString());
+  }
+  if (params.oauthVerified) {
+    url.searchParams.set("oauthverified", params.oauthVerified.toString());
+  }
+  if (params.oauthCompleted) {
+    url.searchParams.set("oauthcompleted", params.oauthCompleted.toString());
+  }
+  if (params.oauthVerificationFailed) {
+    url.searchParams.set("oauthverificationfailed", params.oauthVerificationFailed.toString());
+  }
+  if (params.oauthFailed) {
+    url.searchParams.set("oauthfailed", params.oauthFailed.toString());
   }
   return url.toString();
 }
@@ -71,7 +86,7 @@ export async function callAllowApi(params: CitadelAllowParams): Promise<void> {
 }
 
 export async function callAuditApi(buildEnv: BUILD_ENV_TYPE, params: CitadelAuditParams): Promise<void> {
-  const url = new URL(`${CITADEL_SERVER_MAP[buildEnv]}/v1/user/audit`);
+  const url = new URL(`${CITADEL_SERVER_MAP[buildEnv]}/v1/auth/audit`);
   await put<void>(url.toString(), params);
 }
 

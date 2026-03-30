@@ -167,9 +167,13 @@ class Torus {
 
     let result: TorusKey;
 
-    // report oauth completed, we won't await this call as it's only for analytics tracking
-    // if recordId isn't provided in the params, we will also report oauth initiated
-    this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthCompleted: true, ...(params.recordId ? {} : { oauthInitiated: true }) });
+    if (!params.recordId) {
+      // report oauth completed, we won't await this call as it's only for analytics tracking
+      // if recordId isn't provided in the params, we will also report oauth initiated
+      this.reportSignerAllow({ ...allowParams, oauthCompleted: true, oauthInitiated: true });
+    } else {
+      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthCompleted: true });
+    }
 
     try {
       result = await retrieveOrImportShare({
@@ -195,17 +199,22 @@ class Torus {
         checkCommitment,
         source: this.source,
       });
-
-      // report oauth verified, we won't await this call as it's only for analytics tracking
-      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true });
     } catch (error) {
-      this.reportSignerAllow(allowParams);
-      // report oauth verification failed, we won't await this call as it's only for analytics tracking
-      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
+      if (params.recordId) {
+        // report oauth verification failed, we won't await this call as it's only for analytics tracking
+        this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
+      } else {
+        this.reportSignerAllow({ ...allowParams, oauthVerificationFailed: true });
+      }
       throw error;
     }
 
-    this.reportSignerAllow(allowParams);
+    if (!params.recordId) {
+      this.reportSignerAllow({ ...allowParams, oauthVerified: true });
+    } else {
+      // report oauth verified, we won't await this call as it's only for analytics tracking
+      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true });
+    }
     return result;
   }
 
