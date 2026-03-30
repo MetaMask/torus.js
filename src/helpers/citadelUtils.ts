@@ -2,6 +2,7 @@ import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP, TORUS_NETWORK_TYPE } from "@torusla
 import { get, put } from "@toruslabs/http-helpers";
 
 import { RetrieveSharesParams } from "../interfaces";
+import { isNullOrUndefined } from "./common";
 
 export interface CitadelAuthFlowAuditParams {
   oauthInitiated?: boolean;
@@ -41,20 +42,20 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
   if (params.source) {
     url.searchParams.set("source", params.source);
   }
-  if (params.oauthInitiated) {
-    url.searchParams.set("oauthinitiated", params.oauthInitiated.toString());
+  if (!isNullOrUndefined(params.oauthInitiated)) {
+    url.searchParams.set("oauthInitiated", params.oauthInitiated.toString());
   }
-  if (params.oauthVerified) {
-    url.searchParams.set("oauthverified", params.oauthVerified.toString());
+  if (!isNullOrUndefined(params.oauthVerified)) {
+    url.searchParams.set("oauthVerified", params.oauthVerified.toString());
   }
-  if (params.oauthCompleted) {
-    url.searchParams.set("oauthcompleted", params.oauthCompleted.toString());
+  if (!isNullOrUndefined(params.oauthCompleted)) {
+    url.searchParams.set("oauthCompleted", params.oauthCompleted.toString());
   }
-  if (params.oauthVerificationFailed) {
-    url.searchParams.set("oauthverificationfailed", params.oauthVerificationFailed.toString());
+  if (!isNullOrUndefined(params.oauthVerificationFailed)) {
+    url.searchParams.set("oauthVerificationFailed", params.oauthVerificationFailed.toString());
   }
-  if (params.oauthFailed) {
-    url.searchParams.set("oauthfailed", params.oauthFailed.toString());
+  if (!isNullOrUndefined(params.oauthFailed)) {
+    url.searchParams.set("oauthFailed", params.oauthFailed.toString());
   }
   return url.toString();
 }
