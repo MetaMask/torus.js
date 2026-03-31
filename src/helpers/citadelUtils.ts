@@ -1,5 +1,21 @@
-import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP } from "@toruslabs/constants";
-import { get } from "@toruslabs/http-helpers";
+import { BUILD_ENV_TYPE, CITADEL_SERVER_MAP, TORUS_NETWORK_TYPE } from "@toruslabs/constants";
+import { get, put } from "@toruslabs/http-helpers";
+
+import { RetrieveSharesParams } from "../interfaces";
+import { isNullOrUndefined } from "./common";
+
+export enum CitadelAllowParamsSetOrUnsetFlag {
+  SET = 1,
+  UNSET = 0,
+}
+
+export interface CitadelAuthFlowAuditParams {
+  oauthInitiated?: boolean;
+  oauthVerified?: boolean;
+  oauthCompleted?: boolean;
+  oauthVerificationFailed?: boolean;
+  oauthFailed?: boolean;
+}
 
 export interface CitadelAllowParams {
   buildEnv: BUILD_ENV_TYPE;
@@ -9,9 +25,22 @@ export interface CitadelAllowParams {
   clientId: string;
   recordId: string;
   source?: string;
-  torusLoginInitiated?: boolean;
-  torusLoginSuccess?: boolean;
-  torusLoginFailed?: boolean;
+  // flags for auditing the auth flow
+  oauthInitiated?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthVerified?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthCompleted?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthVerificationFailed?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthFailed?: CitadelAllowParamsSetOrUnsetFlag;
+}
+
+export interface CitadelAuditParams extends CitadelAuthFlowAuditParams {
+  recordId: string;
+  authConnection: string;
+  authConnectionId: string;
+  groupedAuthConnectionId: string;
+  oAuthUserId: string;
+  web3AuthNetwork: string;
+  web3AuthClientId: string;
 }
 
 export function buildAllowUrl(params: CitadelAllowParams): string {
@@ -24,20 +53,53 @@ export function buildAllowUrl(params: CitadelAllowParams): string {
   if (params.source) {
     url.searchParams.set("source", params.source);
   }
-  if (typeof params.torusLoginInitiated !== "undefined") {
-    url.searchParams.set("toruslogininitiated", params.torusLoginInitiated.toString());
+  if (!isNullOrUndefined(params.oauthInitiated)) {
+    url.searchParams.set("oauthInitiated", params.oauthInitiated.toString());
   }
-  if (typeof params.torusLoginSuccess !== "undefined") {
-    url.searchParams.set("torusloginsuccess", params.torusLoginSuccess.toString());
+  if (!isNullOrUndefined(params.oauthVerified)) {
+    url.searchParams.set("oauthVerified", params.oauthVerified.toString());
   }
-  if (typeof params.torusLoginFailed !== "undefined") {
-    url.searchParams.set("torusloginfailed", params.torusLoginFailed.toString());
+  if (!isNullOrUndefined(params.oauthCompleted)) {
+    url.searchParams.set("oauthCompleted", params.oauthCompleted.toString());
+  }
+  if (!isNullOrUndefined(params.oauthVerificationFailed)) {
+    url.searchParams.set("oauthVerificationFailed", params.oauthVerificationFailed.toString());
+  }
+  if (!isNullOrUndefined(params.oauthFailed)) {
+    url.searchParams.set("oauthFailed", params.oauthFailed.toString());
   }
   return url.toString();
 }
 
+export function buildAuditPayload(
+  network: TORUS_NETWORK_TYPE,
+  clientId: string,
+  params: RetrieveSharesParams,
+  authFlowAuditParams: CitadelAuthFlowAuditParams
+): CitadelAuditParams {
+  if (!params.recordId) {
+    params.recordId = generateRecordId();
+  }
+
+  return {
+    ...authFlowAuditParams,
+    recordId: params.recordId,
+    authConnection: params.authConnection || "",
+    authConnectionId: params.verifierParams.sub_verifier_ids?.[0] || "",
+    groupedAuthConnectionId: params.verifier || "",
+    oAuthUserId: params.verifierParams.verifier_id || "",
+    web3AuthNetwork: network,
+    web3AuthClientId: clientId,
+  };
+}
+
 export async function callAllowApi(params: CitadelAllowParams): Promise<void> {
   await get<void>(buildAllowUrl(params));
+}
+
+export async function callAuditApi(buildEnv: BUILD_ENV_TYPE, params: CitadelAuditParams): Promise<void> {
+  const url = new URL(`${CITADEL_SERVER_MAP[buildEnv]}/v1/auth/audit`);
+  await put<void>(url.toString(), params);
 }
 
 export function generateRecordId(): string {

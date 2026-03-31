@@ -221,6 +221,7 @@ export interface VerifierParams {
   [key: string]: unknown;
   verifier_id: string;
   extended_verifier_id?: string;
+  sub_verifier_ids?: string[];
 }
 
 export type StringifiedType = Record<string, unknown>;
@@ -283,6 +284,11 @@ export interface ImportKeyParams {
   newPrivateKey: string;
   extraParams?: TorusUtilsExtraParams;
   checkCommitment?: boolean;
+
+  /**
+   * Optional recordId to used for the analytics tracking.
+   */
+  recordId?: string;
 }
 
 export interface RetrieveSharesParams {
@@ -295,4 +301,15 @@ export interface RetrieveSharesParams {
   extraParams?: TorusUtilsExtraParams;
   useDkg?: boolean;
   checkCommitment?: boolean;
+
+  /**
+   * User social login provider name.
+   * This is used for the analytics tracking.
+   */
+  authConnection?: string;
+
+  /**
+   * Optional recordId to used for the analytics tracking.
+   */
+  recordId?: string;
 }

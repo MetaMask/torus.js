@@ -161,3 +161,7 @@ export function retryCommitment(executionPromise: () => Promise<JRPCResponse<Com
 
   return retryWithBackoff(0);
 }
+
+export function isNullOrUndefined(value: unknown): value is null | undefined {
+  return value === null || value === undefined;
+}

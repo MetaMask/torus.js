@@ -27,7 +27,7 @@ import {
 import log from "../loglevel";
 import { Some } from "../some";
 import { TorusUtilsExtraParams } from "../TorusUtilsExtraParams";
-import { callAllowApi } from "./citadelUtils";
+import { callAllowApi, CitadelAllowParamsSetOrUnsetFlag } from "./citadelUtils";
 import {
   base64ToBytes,
   bigintToHex,
@@ -390,6 +390,7 @@ export async function retrieveOrImportShare(params: {
     source,
     recordId,
   } = params;
+  // call feature-gating check before share retrieval
   await callAllowApi({
     buildEnv,
     verifier,
@@ -398,7 +399,8 @@ export async function retrieveOrImportShare(params: {
     clientId,
     source,
     recordId,
-    torusLoginInitiated: true,
+    oauthInitiated: CitadelAllowParamsSetOrUnsetFlag.SET,
+    oauthCompleted: CitadelAllowParamsSetOrUnsetFlag.SET,
   });
 
   // generate temporary private and public key that is used to secure receive shares

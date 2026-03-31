@@ -4,9 +4,13 @@ import { setAPIKey, setEmbedHost } from "@toruslabs/http-helpers";
 import { config } from "./config";
 import {
   bigintToHex,
+  buildAuditPayload,
   bytesToHex,
   callAllowApi,
+  callAuditApi,
   CitadelAllowParams,
+  CitadelAllowParamsSetOrUnsetFlag,
+  CitadelAuthFlowAuditParams,
   Curve,
   encodeEd25519Point,
   generateAddressFromPubKey,
@@ -150,6 +154,8 @@ class Torus {
       extraParams.session_token_exp_second = Torus.sessionTime;
     }
 
+    const recordId = params.recordId || generateRecordId();
+
     const allowParams = {
       buildEnv: this.buildEnv,
       verifier,
@@ -157,10 +163,17 @@ class Torus {
       network: this.network,
       clientId: this.clientId,
       source: this.source,
-      recordId: generateRecordId(),
+      recordId,
+    };
+
+    // for auditing the auth flow
+    const auditParams: CitadelAuthFlowAuditParams = {
+      // at this point, user has completed the oauth login
+      oauthCompleted: true,
     };
 
     let result: TorusKey;
+
     try {
       result = await retrieveOrImportShare({
         recordId: allowParams.recordId,
@@ -186,11 +199,23 @@ class Torus {
         source: this.source,
       });
     } catch (error) {
-      this.reportSignerAllow({ ...allowParams, torusLoginFailed: true });
+      if (params.recordId) {
+        // report oauth verification failed, we won't await this call as it's only for analytics tracking
+        auditParams.oauthVerificationFailed = true;
+        this.reportUserAuthFlowAudit({ ...params, recordId }, auditParams);
+      } else {
+        this.reportSignerAllow({ ...allowParams, oauthVerificationFailed: CitadelAllowParamsSetOrUnsetFlag.SET });
+      }
       throw error;
     }
 
-    this.reportSignerAllow({ ...allowParams, torusLoginSuccess: true });
+    if (!params.recordId) {
+      this.reportSignerAllow({ ...allowParams, oauthVerified: CitadelAllowParamsSetOrUnsetFlag.SET });
+    } else {
+      // report oauth verified, we won't await this call as it's only for analytics tracking
+      auditParams.oauthVerified = true;
+      this.reportUserAuthFlowAudit({ ...params, recordId }, auditParams);
+    }
     return result;
   }
 
@@ -199,6 +224,21 @@ class Torus {
       await callAllowApi(params);
     } catch (error) {
       log.error("Failed to log allow api", error);
+    }
+  }
+
+  /**
+   * Report user auth flow audit to the citadel server.
+   * @param recordId - The record id to be used for the analytics tracking.
+   * @param params - The parameters for the retrieve shares operation.
+   * @param authStepStatus - The status of the authentication steps.
+   */
+  async reportUserAuthFlowAudit(params: RetrieveSharesParams, authFlowAuditParams: CitadelAuthFlowAuditParams): Promise<void> {
+    try {
+      const auditParams = buildAuditPayload(this.network, this.clientId, params, authFlowAuditParams);
+      await callAuditApi(this.buildEnv, auditParams);
+    } catch (error) {
+      log.error("Failed to log user auth flow audit", error);
     }
   }
 
@@ -262,8 +302,10 @@ class Torus {
       }
     }
 
+    const recordId = params.recordId || generateRecordId();
+
     return retrieveOrImportShare({
-      recordId: generateRecordId(),
+      recordId,
       legacyMetadataHost: this.legacyMetadataHost,
       serverTimeOffset: this.serverTimeOffset,
       enableOneKey: this.enableOneKey,
