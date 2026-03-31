@@ -4,6 +4,11 @@ import { get, put } from "@toruslabs/http-helpers";
 import { RetrieveSharesParams } from "../interfaces";
 import { isNullOrUndefined } from "./common";
 
+export enum CitadelAllowParamsSetOrUnsetFlag {
+  SET = 1,
+  UNSET = 0,
+}
+
 export interface CitadelAuthFlowAuditParams {
   oauthInitiated?: boolean;
   oauthVerified?: boolean;
@@ -12,7 +17,7 @@ export interface CitadelAuthFlowAuditParams {
   oauthFailed?: boolean;
 }
 
-export interface CitadelAllowParams extends CitadelAuthFlowAuditParams {
+export interface CitadelAllowParams {
   buildEnv: BUILD_ENV_TYPE;
   verifier: string;
   verifierId: string;
@@ -20,6 +25,12 @@ export interface CitadelAllowParams extends CitadelAuthFlowAuditParams {
   clientId: string;
   recordId: string;
   source?: string;
+  // flags for auditing the auth flow
+  oauthInitiated?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthVerified?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthCompleted?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthVerificationFailed?: CitadelAllowParamsSetOrUnsetFlag;
+  oauthFailed?: CitadelAllowParamsSetOrUnsetFlag;
 }
 
 export interface CitadelAuditParams extends CitadelAuthFlowAuditParams {

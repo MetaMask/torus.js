@@ -9,6 +9,7 @@ import {
   callAllowApi,
   callAuditApi,
   CitadelAllowParams,
+  CitadelAllowParamsSetOrUnsetFlag,
   CitadelAuthFlowAuditParams,
   Curve,
   encodeEd25519Point,
@@ -165,15 +166,13 @@ class Torus {
       recordId,
     };
 
-    let result: TorusKey;
+    // for auditing the auth flow
+    const auditParams: CitadelAuthFlowAuditParams = {
+      // at this point, user has completed the oauth login
+      oauthCompleted: true,
+    };
 
-    if (!params.recordId) {
-      // report oauth completed, we won't await this call as it's only for analytics tracking
-      // if recordId isn't provided in the params, we will also report oauth initiated
-      this.reportSignerAllow({ ...allowParams, oauthCompleted: true, oauthInitiated: true });
-    } else {
-      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthCompleted: true });
-    }
+    let result: TorusKey;
 
     try {
       result = await retrieveOrImportShare({
@@ -202,18 +201,20 @@ class Torus {
     } catch (error) {
       if (params.recordId) {
         // report oauth verification failed, we won't await this call as it's only for analytics tracking
-        this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerificationFailed: true });
+        auditParams.oauthVerificationFailed = true;
+        this.reportUserAuthFlowAudit({ ...params, recordId }, auditParams);
       } else {
-        this.reportSignerAllow({ ...allowParams, oauthVerificationFailed: true });
+        this.reportSignerAllow({ ...allowParams, oauthVerificationFailed: CitadelAllowParamsSetOrUnsetFlag.SET });
       }
       throw error;
     }
 
     if (!params.recordId) {
-      this.reportSignerAllow({ ...allowParams, oauthVerified: true });
+      this.reportSignerAllow({ ...allowParams, oauthVerified: CitadelAllowParamsSetOrUnsetFlag.SET });
     } else {
       // report oauth verified, we won't await this call as it's only for analytics tracking
-      this.reportUserAuthFlowAudit({ ...params, recordId }, { oauthVerified: true });
+      auditParams.oauthVerified = true;
+      this.reportUserAuthFlowAudit({ ...params, recordId }, auditParams);
     }
     return result;
   }
